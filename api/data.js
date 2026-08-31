@@ -160,11 +160,31 @@ export default async function (req, res) {
     }
 
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
-    if (String(body.pin || "") !== String(PIN)) return res.status(401).json({ error: "bad passcode" });
+    const OPEN = new Set(["note"]);           // actions that need no passcode
+    if (!OPEN.has(body.action) && String(body.pin || "") !== String(PIN)) {
+      return res.status(401).json({ error: "bad passcode" });
+    }
 
     const { db } = await readDb();
     const find = id => db.tournaments.find(x => x.id === id);
     const a = body.action;
+
+    if (a === "note" || a === "removeNote") {
+      const tour = find(body.tournamentId);
+      if (!tour) return res.status(404).json({ error: "no such tournament" });
+      tour.notes = Array.isArray(tour.notes) ? tour.notes : [];
+      if (a === "removeNote") {
+        tour.notes = tour.notes.filter(n => n.id !== clean(body.id, 24));
+      } else {
+        const who = clean(body.who, 40);
+        const text = clean(body.text, 600);
+        if (!who || !text) return res.status(400).json({ error: "name and comment required" });
+        if (tour.notes.length >= 500) tour.notes.shift();
+        tour.notes.push({ id: "n" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), who, text, at: Date.now() });
+      }
+      const t = await writeDb(db);
+      return res.status(200).json({ t, db });
+    }
 
     if (a === "score" || a === "clearScore") {
       const tour = find(body.tournamentId);
