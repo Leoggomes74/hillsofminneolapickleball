@@ -93,6 +93,7 @@ function viewForm() {
   if (f.step === 1) {
     h += '<div class="fsec"><label>Tournament name</label><input type="text" data-field="name" value="' + esc(f.name) + '" placeholder="e.g. Hills of Minneola Fall Classic"></div>';
     h += '<div class="fsec"><label>Category</label>' + selectEl("category", f.category, TModel.CATEGORIES.map(function (c) { return [c, c]; })) + '</div>';
+    h += '<div class="fsec"><label>Tournament director</label><input type="text" data-field="director" value="' + esc(f.director) + '" placeholder="Who runs the event"></div>';
     h += '<div class="fsec two"><div><label>Start date</label><input type="date" data-field="date" value="' + esc(f.date) + '"></div>' +
       '<div><label>Start time</label><input type="time" data-field="time" value="' + esc(f.time) + '"></div></div>';
     h += '<div class="fsec two"><div><label>' + (single ? 'Players' : 'Teams') + '</label><input type="number" min="2" max="32" data-field="teamCount" value="' + f.teamCount + '"></div>' +
@@ -362,7 +363,8 @@ function tabInfo(t, v) {
   h += sec("This tournament", esc(t.name) + ' — ' + esc(t.category) + ', ' + esc(when(t)) + '. ' +
     (t.teams || []).length + ' ' + (single ? 'players' : 'teams') +
     (v.tables.length > 1 ? ' in ' + v.tables.length + ' pools (' + counts.join(', ') + ')' : ' in a single pool') +
-    '. Everyone plays everyone in their pool: ' + v.pool.length + ' pool matches' + (t.knockout ? ' plus four knockout matches' : '') + '.');
+    '. Everyone plays everyone in their pool: ' + v.pool.length + ' pool matches' + (t.knockout ? ' plus four knockout matches' : '') + '.' +
+    (t.director ? ' Tournament director: ' + esc(t.director) + '.' : ''));
   h += sec("Scoring", 'Pool games: ' + TModel.fmtLabel(t.poolFormat).toLowerCase() + '.' +
     (t.knockout ? ' Semifinals and third place: ' + TModel.fmtLabel(t.koFormat).toLowerCase() + '. Final: ' + TModel.fmtLabel(t.finalFormat).toLowerCase() + '.' : '') +
     ' Traditional side-out scoring — only the serving team scores. Call the score out loud before every serve.');
@@ -376,7 +378,7 @@ function tabInfo(t, v) {
   h += sec("Conduct", 'Courtesy first, handshake at the net after every match. Unsportsmanlike behavior draws a technical foul worth a point to the other team; a second forfeits the game. Outdoor balls only, non-marking shoes.');
   h += sec("Safety — Florida heat", 'Drink water every round and wear sunscreen. Dizziness, nausea or confusion means stop playing and find the Tournament Director. Call “ball on court” to stop a rally when a stray ball comes through.', true);
   h += sec("Live results", 'Scores are stored on the tournament server the moment they are entered, so anyone with the site address sees them — the page refreshes itself every few seconds. Entering or editing a score needs the organizer passcode.');
-  h += sec("Tournament Director", 'Protests go to the TD verbally, immediately after the incident. The TD has final say on scheduling, weather and every dispute. Anything not covered here follows USAPA rules.');
+  h += sec("Tournament Director", (t.director ? '<b>' + esc(t.director) + '</b> is directing this tournament. ' : '') + 'Protests go to the TD verbally, immediately after the incident. The TD has final say on scheduling, weather and every dispute. Anything not covered here follows USAPA rules.');
   return h + '<div class="pad"></div>';
 }
 function sec(title, body, accent) {

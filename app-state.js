@@ -36,7 +36,7 @@ function demoTournament() {
   ];
   return {
     id: "hills-2026", name: "Hills of Minneola Mixed Doubles", category: "Mixed doubles",
-    date: "2026-08-30", time: "08:00", poolCount: 2, knockout: true,
+    date: "2026-08-30", time: "08:00", poolCount: 2, knockout: true, director: "",
     poolFormat: "to11win1", koFormat: "to11win2", finalFormat: "bo3to11",
     teams: roster.map(function (r, i) { return { name: r[0], players: r[1], pool: i < 5 ? 0 : 1 }; }),
     results: {}, locked: false, archived: false, createdAt: Date.now()
@@ -156,7 +156,7 @@ function clearMatch() {
 function blankForm() {
   return {
     mode: "new", id: null,
-    name: "", category: TModel.CATEGORIES[0],
+    name: "", category: TModel.CATEGORIES[0], director: "",
     date: new Date().toISOString().slice(0, 10), time: "08:00",
     teamCount: 8, poolCount: 2, knockout: true,
     poolFormat: "to11win1", koFormat: "to11win2", finalFormat: "bo3to11",
@@ -179,7 +179,7 @@ function openEdit(id) {
     var t = (S.db.tournaments || []).filter(function (x) { return x.id === id; })[0];
     if (!t) return;
     S.form = {
-      mode: "edit", id: t.id, name: t.name, category: t.category,
+      mode: "edit", id: t.id, name: t.name, category: t.category, director: t.director || "",
       date: t.date || "", time: t.time || "",
       teamCount: (t.teams || []).length, poolCount: t.poolCount || 1, knockout: t.knockout !== false,
       poolFormat: t.poolFormat, koFormat: t.koFormat, finalFormat: t.finalFormat,
@@ -211,7 +211,7 @@ function submitForm() {
   if (err) { f.error = err; render(); return; }
   var single = TModel.isSingles(f.category);
   var payload = {
-    name: f.name, category: f.category, date: f.date, time: f.time,
+    name: f.name, category: f.category, director: String(f.director || "").trim(), date: f.date, time: f.time,
     poolCount: parseInt(f.poolCount, 10) || 1, knockout: !!f.knockout,
     poolFormat: f.poolFormat, koFormat: f.koFormat, finalFormat: f.finalFormat,
     teams: f.teams.map(function (t) {
