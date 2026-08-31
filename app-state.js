@@ -15,7 +15,9 @@ var S = {
   editing: null, draft: [],
   menu: null,
   form: null,
-  confirm: null
+  confirm: null,
+  note: { who: "", text: "" },
+  noteBusy: false
 };
 
 try { S.unlocked = sessionStorage.getItem("hom.unlocked") === "1"; } catch (e) {}
@@ -68,7 +70,7 @@ function load(quiet) {
 
 function post(payload, okMsg) {
   if (!CLOUD) { toast("Offline — not saved"); return Promise.resolve(null); }
-  payload.pin = S.pinUsed || "";
+  if (payload.action !== "note") payload.pin = S.pinUsed || "";
   return fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
     .then(function (r) {
       if (r.status === 401) { S.unlocked = false; S.pinUsed = ""; try { sessionStorage.removeItem("hom.unlocked"); sessionStorage.removeItem("hom.pin"); } catch (e) {} throw new Error("passcode"); }
@@ -253,6 +255,21 @@ document.addEventListener("click", function (e) {
   if (act === "menu") { S.menu = S.menu === val ? null : val; return render(); }
   if (act === "closemenu") { S.menu = null; return render(); }
   if (act === "refresh") { S.sync = "loading"; render(); load(); return; }
+  if (act === "postnote") {
+    var who = String(S.note.who || "").trim(), text = String(S.note.text || "").trim();
+    if (!who || !text) { toast("Add your name and a comment"); return; }
+    var tid = S.tourId;
+    S.noteBusy = true; render();
+    post({ action: "note", tournamentId: tid, who: who, text: text }).then(function (d) {
+      S.noteBusy = false;
+      if (d) { S.note = { who: "", text: "" }; toast("Thanks — comment posted"); }
+      else render();
+    });
+    return;
+  }
+  if (act === "delnote") {
+    return needPin(function () { post({ action: "removeNote", tournamentId: S.tourId, id: val }, "Comment removed"); });
+  }
   if (act === "score") return openSheet(val);
   if (act === "sheetclose") { S.editing = null; return render(); }
   if (act === "save") return saveSheet(val);
@@ -288,7 +305,7 @@ document.addEventListener("click", function (e) {
 });
 
 document.addEventListener("input", function (e) {
-  var el = e.target.closest("[data-field],[data-num],[data-team]");
+  var el = e.target.closest("[data-field],[data-num],[data-team],[data-note]");
   if (!el) return;
   if (el.hasAttribute("data-num")) {
     var raw = el.value.replace(/[^0-9]/g, "").slice(0, 2);
@@ -298,6 +315,10 @@ document.addEventListener("input", function (e) {
     var p = el.getAttribute("data-num").split(":");
     S.draft[+p[0]][p[1] === "a" ? "a" : "b"] = n;
     S.draft[+p[0]].played = true;
+    return;
+  }
+  if (el.hasAttribute("data-note")) {
+    S.note[el.getAttribute("data-note")] = el.value;
     return;
   }
   if (el.hasAttribute("data-team")) {
@@ -344,7 +365,9 @@ render();
 if (CLOUD) {
   load(true);
   setInterval(function () {
-    if (!S.editing && !S.gate && !S.form && document.visibilityState !== "hidden") load(true);
+    var ae = document.activeElement;
+    var typing = ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName);
+    if (!S.editing && !S.gate && !S.form && !typing && document.visibilityState !== "hidden") load(true);
   }, 10000);
   document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") load(true); });
 }

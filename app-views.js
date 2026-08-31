@@ -178,9 +178,10 @@ function viewEvent() {
   if (S.tab === "bracket") h += tabBracket(t, v);
   if (S.tab === "teams") h += tabTeams(t, v);
   if (S.tab === "recap") h += tabRecap(t, v);
+  if (S.tab === "notes") h += tabNotes(t, v);
   if (S.tab === "info") h += tabInfo(t, v);
 
-  var tabs = [["now", "Now"], ["groups", "Groups"], ["bracket", "Bracket"], ["teams", "Teams"], ["recap", "Recap"], ["info", "Info"]];
+  var tabs = [["now", "Now"], ["groups", "Groups"], ["bracket", "Bracket"], ["teams", "Teams"], ["recap", "Recap"], ["notes", "Say"], ["info", "Info"]];
   if (!t.knockout) tabs.splice(2, 1);
   h += '<div class="nav"><div style="grid-template-columns:repeat(' + tabs.length + ',1fr)">' +
     tabs.map(function (x) {
@@ -356,6 +357,31 @@ function tabRecap(t, v) {
   return h + '<div class="pad"></div>';
 }
 
+function noteWhen(ms) {
+  var d = new Date(ms);
+  if (isNaN(d)) return "";
+  return d.toLocaleDateString([], { month: "short", day: "numeric" }) + " · " +
+    d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+function tabNotes(t, v) {
+  var notes = (t.notes || []).slice().sort(function (x, y) { return y.at - x.at; });
+  var h = '<div class="bar"><h2>Say something</h2><div class="meta">' + notes.length + (notes.length === 1 ? ' comment' : ' comments') + '</div></div>';
+  h += '<div class="fnote top">Suggestions, thanks, gripes about the heat — anything you want the organizers to read. No passcode needed.</div>';
+  h += '<div class="fsec"><label>Your name</label><input type="text" data-note="who" value="' + esc(S.note.who) + '" placeholder="Who is this?" maxlength="40"></div>';
+  h += '<div class="fsec"><label>Comment or suggestion</label><textarea data-note="text" rows="4" placeholder="What would you tell the organizers?" maxlength="600">' + esc(S.note.text) + '</textarea></div>';
+  h += '<button class="fbtn wide"' + (S.noteBusy ? ' disabled' : '') + ' data-act="postnote">' + (S.noteBusy ? 'Posting…' : 'Post comment') + '</button>';
+  if (!notes.length) {
+    h += '<div class="empty">No comments yet — be the first.</div>';
+  } else {
+    h += '<div class="lbl rule">What people are saying</div>';
+    notes.forEach(function (n) {
+      h += '<div class="cmt"><div class="chead"><span class="cwho">' + esc(n.who) + '</span><span class="cat">' + esc(noteWhen(n.at)) + '</span></div>' +
+        '<p>' + esc(n.text) + '</p>' +
+        (S.unlocked ? '<button class="cdel" data-act="delnote" data-val="' + n.id + '">Remove</button>' : '') + '</div>';
+    });
+  }
+  return h + '<div class="pad"></div>';
+}
 function tabInfo(t, v) {
   var single = TModel.isSingles(t.category);
   var counts = v.tables.map(function (r, i) { return r.length + ' in ' + L(i); });
