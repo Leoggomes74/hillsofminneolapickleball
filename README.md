@@ -5,10 +5,37 @@ link sees the same results.
 
 ## Files
 
-- index.html — the whole site (no build step)
-- api/results.js — serverless function that reads/writes the scores
-- package.json — only there to mark the API route as an ES module
+- index.html — shell and styles (no build step)
+- app-core.js — schedule generation, formats, standings, knockout logic
+- app-views.js — all screens
+- app-state.js — state, API calls, events
+- api/data.js — serverless function: multi-tournament read/write
+- package.json — marks the API route as an ES module
 - vercel.json — caching headers
+
+## Multiple tournaments
+
+The home screen lists every tournament. Create one with **+ Create tournament**
+(passcode required): name, category, date and time, number of teams, number of
+pools, score format for pool games and for the knockout stage, then the roster —
+team name plus player names, with pool letters you can tap to move an entry.
+
+The app generates the round robin inside each pool, numbers the matches, and
+builds the bracket automatically:
+
+- 1 pool → top four to the semifinals (1v4, 2v3)
+- 2 pools → semifinals cross over (A1–B2, B1–A2)
+- 3+ pools → pool winners, filled to four by the best runners-up on differential
+- Knockout off → pool play only, winner is top of the table
+
+Each tournament also supports third place and a final in any of the four score
+formats, including best of 3.
+
+Per-tournament actions live behind the **⋯** button: edit setup, duplicate,
+open by default, lock scoring when finished, archive, or delete permanently.
+
+Your existing Hills of Minneola scores are migrated automatically the first time
+the new API route runs — nothing to re-enter.
 
 ## Deploy (about 5 minutes)
 
