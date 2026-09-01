@@ -151,6 +151,8 @@ function viewForm() {
     h += '<div class="fnote top">Master data for the whole tournament. Each event type you add next carries its own date, pools, format and roster — and can be left empty for players to register themselves.</div>';
     h += '<div class="fsec"><label>Tournament name</label><input type="text" data-field="name" value="' + esc(f.name) + '" placeholder="e.g. Hills of Minneola Fall Classic"></div>';
     h += '<div class="fsec"><label>Tournament director</label><input type="text" data-field="director" value="' + esc(f.director) + '" placeholder="Who runs the event"></div>';
+    h += '<div class="fsec"><label>Registration fee</label><input type="text" data-field="fee" value="' + esc(f.fee) + '" placeholder="e.g. $40 per team" maxlength="40">' +
+      '<div class="fnote">Shown on the Info tab and to anyone registering. Leave blank if the event is free.</div></div>';
     h += '<div class="fsec two"><div><label>Start date</label><input type="date" data-field="date" value="' + esc(f.date) + '"></div>' +
       '<div><label>Start time</label><input type="time" data-field="time" value="' + esc(f.time) + '"></div></div>';
     if (f.error) h += '<div class="ferr">' + esc(f.error) + '</div>';
@@ -470,11 +472,12 @@ function tabTeams(t, e, v) {
   if (open) {
     h += '<div class="regbox"><div class="regh">Register for ' + esc(typeName(e.eventTypeId)) + '</div>' +
       '<div class="regsub">' + esc(when(e)) + ' · no passcode needed' + (cap ? ' · ' + (cap - n) + ' place' + (cap - n === 1 ? '' : 's') + ' left' : '') + '</div>' +
+      (t.fee ? '<div class="regfee">Entry fee · <b>' + esc(t.fee) + '</b></div>' : '') +
       '<div class="fsec"><label>' + (single ? 'Entry name' : 'Team name') + '</label><input type="text" data-reg="team" value="' + esc(S.reg.team) + '" placeholder="' + (single ? 'How should we list you?' : 'What is your team called?') + '" maxlength="40"></div>' +
       '<div class="fsec"><label>Your name</label><input type="text" data-reg="p1" value="' + esc(S.reg.p1) + '" placeholder="First and last name" maxlength="40"></div>' +
       (single ? '' : '<div class="fsec"><label>Partner name</label><input type="text" data-reg="p2" value="' + esc(S.reg.p2) + '" placeholder="First and last name" maxlength="40"></div>') +
       '<button class="fbtn wide"' + (S.regBusy ? ' disabled' : '') + ' data-act="register">' + (S.regBusy ? 'Registering\u2026' : 'Register') + '</button>' +
-      '<div class="fnote">You go straight into the draw and the emptiest pool. Organizers can correct any detail afterwards.</div></div>';
+      '<div class="fnote">You go straight into the draw and the emptiest pool.' + (t.fee ? ' Settle the ' + esc(t.fee) + ' entry fee with the tournament director before your first match.' : '') + ' Organizers can correct any detail afterwards.</div></div>';
   } else if (e.regOpen !== false && cap && n >= cap) {
     h += '<div class="empty">This event is full — ' + cap + ' entries. Talk to the tournament director about a waiting list.</div>';
   }
@@ -587,6 +590,9 @@ function tabInfo(t, e, v) {
   var h = '<div class="bar"><h2>Format &amp; rules</h2></div>';
   h += sec("This tournament", esc(t.name) + ' — ' + esc(when(t)) + '. ' + evs.length + ' event' + (evs.length === 1 ? '' : 's') + ' on the programme.' +
     (t.director ? ' Tournament director: <b>' + esc(t.director) + '</b>.' : ''));
+  h += sec("Registration fee", t.fee
+    ? '<b>' + esc(t.fee) + '</b>. Payable to the tournament director before your first match — an entry is only confirmed once the fee is settled.'
+    : 'No entry fee for this tournament.');
   h += '<div class="lbl rule">Events</div>';
   evs.forEach(function (x) {
     var xv = TModel.build(x);

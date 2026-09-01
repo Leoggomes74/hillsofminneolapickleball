@@ -213,7 +213,7 @@ function blankEvent(typeId) {
 }
 function blankForm() {
   var f = {
-    mode: "new", id: null, name: "", director: "",
+    mode: "new", id: null, name: "", director: "", fee: "",
     date: new Date().toISOString().slice(0, 10), time: "08:00",
     events: [blankEvent()], step: 1, error: ""
   };
@@ -251,7 +251,7 @@ function openEdit(id) {
     var t = (S.db.tournaments || []).filter(function (x) { return x.id === id; })[0];
     if (!t) return;
     S.form = {
-      mode: "edit", id: t.id, name: t.name, director: t.director || "",
+      mode: "edit", id: t.id, name: t.name, director: t.director || "", fee: t.fee || "",
       date: t.date || "", time: t.time || "",
       events: evsOf(t).map(function (e) {
         return {
@@ -305,7 +305,7 @@ function submitForm() {
   var err = formValid(f);
   if (err) { f.error = err; render(); return; }
   var payload = {
-    name: f.name, director: String(f.director || "").trim(), date: f.date, time: f.time,
+    name: f.name, director: String(f.director || "").trim(), fee: String(f.fee || "").trim(), date: f.date, time: f.time,
     events: f.events.map(function (e) {
       var single = typeSingles(e.eventTypeId);
       return {
