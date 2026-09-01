@@ -174,13 +174,16 @@ function sanitizeEvent(body, existing) {
   const teams = Array.isArray(body.teams) ? body.teams.slice(0, 32).map((t, i) => ({
     name: clean(t && t.name, 40) || `Team ${i + 1}`,
     players: (Array.isArray(t && t.players) ? t.players : []).slice(0, 2).map(p => clean(p, 40)).filter(Boolean),
-    pool: Math.max(0, Math.min(7, parseInt(t && t.pool, 10) || 0))
+    pool: Math.max(0, Math.min(7, parseInt(t && t.pool, 10) || 0)),
+    registered: t && t.registered ? Number(t.registered) || 0 : 0
   })) : [];
   return {
     id: existing ? existing.id : rid("ev"),
     eventTypeId: slug(body.eventTypeId || "mixed-doubles"),
     date: clean(body.date, 10),
     time: clean(body.time, 5),
+    regOpen: body.regOpen !== false,
+    maxTeams: Math.max(0, Math.min(32, parseInt(body.maxTeams, 10) || 0)),
     poolCount: Math.max(1, Math.min(8, parseInt(body.poolCount, 10) || 1)),
     knockout: body.knockout !== false,
     poolFormat: clean(body.poolFormat, 12) || "to11win1",
@@ -223,7 +226,7 @@ export default async function (req, res) {
     }
 
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
-    const OPEN = new Set(["note"]);           // actions that need no passcode
+    const OPEN = new Set(["note", "register"]);   // actions that need no passcode
     if (!OPEN.has(body.action) && String(body.pin || "") !== String(PIN)) {
       return res.status(401).json({ error: "bad passcode" });
     }
@@ -255,6 +258,34 @@ export default async function (req, res) {
         db.eventTypes = db.eventTypes.filter(t => t.id !== body.id);
         if (!db.eventTypes.length) return res.status(409).json({ error: "keep at least one event type" });
       }
+      const t = await writeDb(db);
+      return res.status(200).json({ t, db });
+    }
+
+    // ---- public self-registration -------------------------------------------
+    if (a === "register") {
+      const tour = find(body.tournamentId);
+      if (!tour) return res.status(404).json({ error: "no such tournament" });
+      if (tour.locked) return res.status(423).json({ error: "this tournament is locked" });
+      const ev = (tour.events || []).find(e => e.id === body.eventId);
+      if (!ev) return res.status(404).json({ error: "no such event" });
+      if (ev.regOpen === false) return res.status(409).json({ error: "registration is closed for this event" });
+      const type = (db.eventTypes || []).find(x => x.id === ev.eventTypeId);
+      const single = type ? !!type.singles : false;
+      const name = clean(body.team, 40), p1 = clean(body.p1, 40), p2 = clean(body.p2, 40);
+      if (!name || !p1 || (!single && !p2)) return res.status(400).json({ error: "name, player and partner are required" });
+      ev.teams = Array.isArray(ev.teams) ? ev.teams : [];
+      const cap = ev.maxTeams ? Math.min(ev.maxTeams, 32) : 32;
+      if (ev.teams.length >= cap) return res.status(409).json({ error: "this event is full" });
+      const lower = s => String(s).toLowerCase();
+      if (ev.teams.some(t => lower(t.name) === lower(name))) return res.status(409).json({ error: "that team name is already taken" });
+      const already = ev.teams.some(t => (t.players || []).some(p => lower(p) === lower(p1) || (p2 && lower(p) === lower(p2))));
+      if (already) return res.status(409).json({ error: "one of those players is already entered" });
+      const pc = Math.max(1, ev.poolCount || 1), counts = new Array(pc).fill(0);
+      ev.teams.forEach(t => { counts[Math.min(pc - 1, Math.max(0, t.pool || 0))]++; });
+      let pool = 0;
+      for (let i = 1; i < pc; i++) if (counts[i] < counts[pool]) pool = i;
+      ev.teams.push({ name, players: single ? [p1] : [p1, p2], pool, registered: Date.now() });
       const t = await writeDb(db);
       return res.status(200).json({ t, db });
     }
