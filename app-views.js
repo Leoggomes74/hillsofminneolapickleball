@@ -63,7 +63,13 @@ function viewHome() {
         '<div class="tfoot"><span class="tstat' + (status === "In progress" ? " on" : "") + '">' + status + '</span>' +
         '<span class="tprog">' + done + ' / ' + sched + ' matches</span></div>' +
       '</button>' +
-      (regOn ? '<button class="regcta" data-act="openreg" data-val="' + t.id + '">Entries open · Register a team →</button>' : '') +
+      (regOn ? '<div class="regrow">' + evs.filter(function (x) {
+        return x.regOpen !== false && (!x.maxTeams || (x.teams || []).length < x.maxTeams);
+      }).map(function (x) {
+        return '<button class="regcta" data-act="openreg" data-val="' + t.id + '|' + x.id + '">' +
+          '<span>Register \u00b7 ' + esc(typeName(x.eventTypeId)) + '</span><i>' +
+          (x.maxTeams ? (x.maxTeams - (x.teams || []).length) + ' left' : (x.teams || []).length + ' in') + ' \u2192</i></button>';
+      }).join('') + '</div>' : '') +
       '<button class="tmenu" data-act="menu" data-val="' + t.id + '">⋯</button>' +
       (S.menu === t.id ? menu(t) : '') +
     '</div>';
@@ -475,12 +481,17 @@ function tabTeams(t, e, v) {
     h += '<div class="empty">Nobody has entered yet.</div><div class="pad"></div>';
     return h;
   }
+  var idxOf = {};
+  (e.teams || []).forEach(function (x, i) { idxOf[x.name] = i; });
   v.tables.forEach(function (rows, pi) {
     if (v.tables.length > 1) h += '<div class="lbl" style="color:var(--green)">Group ' + L(pi) + '</div>';
     rows.forEach(function (r) {
-      h += '<div class="team"><div><div class="n">' + esc(r.team) + '</div><div class="p">' + esc(players(r.players)) + '</div></div><div class="r">' + r.rec + '</div></div>';
+      h += '<div class="team"><div><div class="n">' + esc(r.team) + '</div><div class="p">' + esc(players(r.players)) + '</div></div>' +
+        '<div class="r">' + r.rec + '</div>' +
+        (t.locked ? '' : '<button class="tedit" data-act="editteam" data-val="' + idxOf[r.team] + '">Edit</button>') + '</div>';
     });
   });
+  h += '<div class="empty small">Organizers: tap <b>Edit</b> on any entry to correct names, move it to another pool or remove it — passcode required.</div>';
   h += '<div class="pad"></div>';
   return h;
 }
@@ -635,6 +646,31 @@ function pairRow(i, side, name, val) {
     '<button class="plus" data-step2="' + i + ':' + side + ':1">+</button></div></div>';
 }
 
+function teamSheet() {
+  var t = tour(), e = ev(), d = S.teamEdit;
+  if (!t || !e || !d) return "";
+  var single = typeSingles(e.eventTypeId), pc = Math.max(1, e.poolCount || 1);
+  var pools = '';
+  if (pc > 1) {
+    var i, btns = '';
+    for (i = 0; i < pc; i++) btns += '<button class="pbtn' + (d.pool === i ? ' on' : '') + '" data-act="teampool" data-val="' + i + '">' + L(i) + '</button>';
+    pools = '<div class="fsec"><label>Pool</label><div class="pools">' + btns + '</div>' +
+      '<div class="fnote">Moving an entry renumbers that pool’s round robin, so scores already entered in the old and new pools are cleared.</div></div>';
+  }
+  return '<div class="back2" data-act="teamclose" data-back="1"><div class="sheet">' +
+    '<div class="h"><b>Edit entry · ' + esc(typeName(e.eventTypeId)) + '</b><button data-act="teamclose">CLOSE</button></div>' +
+    '<div class="fsec"><label>' + (single ? 'Entry name' : 'Team name') + '</label><input type="text" data-tform="name" value="' + esc(d.name) + '" maxlength="40"></div>' +
+    '<div class="fsec"><label>' + (single ? 'Player' : 'Player 1') + '</label><input type="text" data-tform="p1" value="' + esc(d.p1) + '" maxlength="40"></div>' +
+    (single ? '' : '<div class="fsec"><label>Player 2</label><input type="text" data-tform="p2" value="' + esc(d.p2) + '" maxlength="40"></div>') +
+    pools +
+    (d.confirm
+      ? '<div class="msg"><b>Remove “' + esc(d.name) + '”?</b> Its pool’s round robin is rebuilt and any scores already entered in that pool are cleared.</div>' +
+        '<div class="acts"><button class="lv" data-act="teamclose">Keep it</button><button class="fn danger" data-act="teamdel">Remove entry</button></div>'
+      : '<button class="rm" data-act="teamaskdel">Remove this entry</button>' +
+        '<div class="acts"><button class="lv" data-act="teamclose">Cancel</button><button class="fn" data-act="teamsave">Save entry</button></div>') +
+    '</div></div>';
+}
+
 function gate() {
   if (!S.gate) return "";
   return '<div class="back2" data-act="gateclose" data-back="1"><div class="sheet gate">' +
@@ -668,7 +704,7 @@ function render() {
   else if (S.screen === "types") h = viewTypes();
   else if (S.screen === "new" || S.screen === "edit") h = S.form ? viewForm() : viewHome();
   else h = viewEvent();
-  h += sheet() + gate() + confirmBox();
+  h += sheet() + teamSheet() + gate() + confirmBox();
   if (S.toast) h += '<div class="toast"><span>' + esc(S.toast) + '</span></div>';
   document.getElementById("app").innerHTML = h;
 }

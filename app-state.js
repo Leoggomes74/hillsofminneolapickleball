@@ -21,6 +21,7 @@ var S = {
   noteBusy: false,
   reg: { team: "", p1: "", p2: "" },
   regBusy: false,
+  teamEdit: null,
   typeDraft: {}, newType: { name: "", singles: false }
 };
 
@@ -351,11 +352,16 @@ document.addEventListener("click", function (e) {
     window.scrollTo(0, 0); return render();
   }
   if (act === "openreg") {
-    S.tourId = val; S.screen = "event"; S.tab = "teams"; S.menu = null;
-    var to = tour(), open = evsOf(to).filter(function (x) {
-      return x.regOpen !== false && (!x.maxTeams || (x.teams || []).length < x.maxTeams);
-    })[0];
-    S.evId = (open || evsOf(to)[0] || {}).id || null;
+    var bits = val.split("|");
+    S.tourId = bits[0]; S.screen = "event"; S.tab = "teams"; S.menu = null;
+    var to = tour();
+    if (bits[1]) S.evId = bits[1];
+    else {
+      var open = evsOf(to).filter(function (x) {
+        return x.regOpen !== false && (!x.maxTeams || (x.teams || []).length < x.maxTeams);
+      })[0];
+      S.evId = (open || evsOf(to)[0] || {}).id || null;
+    }
     window.scrollTo(0, 0); return render();
   }
   if (act === "pickev") { S.evId = val; S.editing = null; window.scrollTo(0, 0); return render(); }  if (act === "home") { S.screen = "home"; S.tourId = null; S.evId = null; S.menu = null; S.form = null; window.scrollTo(0, 0); return render(); }
@@ -475,6 +481,38 @@ document.addEventListener("click", function (e) {
     ed.teams.splice(+pr[1], 1); ed.teamCount = ed.teams.length; S.form.error = ""; return render();
   }
 
+  if (act === "editteam") {
+    var te = ev(), tt = tour(); if (!te || !tt) return;
+    if (tt.locked) { toast("Tournament is locked"); return; }
+    return needPin(function () {
+      var row = (te.teams || [])[+val]; if (!row) return;
+      S.teamEdit = {
+        index: +val, name: row.name || "",
+        p1: (row.players || [])[0] || "", p2: (row.players || [])[1] || "",
+        pool: row.pool || 0, confirm: false
+      };
+      render();
+    });
+  }
+  if (act === "teamclose") { S.teamEdit = null; return render(); }
+  if (act === "teampool") { S.teamEdit.pool = +val; return render(); }
+  if (act === "teamsave") {
+    var ts = tour(), es = ev(), d = S.teamEdit; if (!ts || !es || !d) return;
+    var sg = typeSingles(es.eventTypeId);
+    if (!String(d.name).trim() || !String(d.p1).trim() || (!sg && !String(d.p2).trim())) { toast("Fill every field"); return; }
+    S.teamEdit = null; render();
+    post({ action: "updateTeam", tournamentId: ts.id, eventId: es.id, index: d.index,
+      name: d.name.trim(), p1: d.p1.trim(), p2: d.p2.trim(), pool: d.pool }, "Entry updated");
+    return;
+  }
+  if (act === "teamaskdel") { S.teamEdit.confirm = true; return render(); }
+  if (act === "teamdel") {
+    var td = tour(), ed = ev(), dd = S.teamEdit; if (!td || !ed || !dd) return;
+    S.teamEdit = null; render();
+    post({ action: "removeTeam", tournamentId: td.id, eventId: ed.id, index: dd.index }, "Entry removed");
+    return;
+  }
+
   if (act === "register") {
     var tr = tour(), er = ev(); if (!tr || !er) return;
     var sng = typeSingles(er.eventTypeId);
@@ -507,7 +545,7 @@ document.addEventListener("click", function (e) {
 });
 
 document.addEventListener("input", function (e) {
-  var el = e.target.closest("[data-field],[data-ef],[data-num],[data-team],[data-note],[data-tf],[data-nt],[data-reg]");
+  var el = e.target.closest("[data-field],[data-ef],[data-num],[data-team],[data-note],[data-tf],[data-nt],[data-reg],[data-tform]");
   if (!el) return;
   if (el.hasAttribute("data-num")) {
     var raw = el.value.replace(/[^0-9]/g, "").slice(0, 2);
@@ -521,6 +559,7 @@ document.addEventListener("input", function (e) {
   }
   if (el.hasAttribute("data-note")) { S.note[el.getAttribute("data-note")] = el.value; return; }
   if (el.hasAttribute("data-reg")) { S.reg[el.getAttribute("data-reg")] = el.value; return; }
+  if (el.hasAttribute("data-tform")) { S.teamEdit[el.getAttribute("data-tform")] = el.value; return; }
   if (el.hasAttribute("data-nt")) { S.newType.name = el.value; return; }
   if (el.hasAttribute("data-tf")) {
     var tid = el.getAttribute("data-tf");
@@ -580,7 +619,7 @@ if (CLOUD) {
   setInterval(function () {
     var ae = document.activeElement;
     var typing = ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName);
-    if (!S.editing && !S.gate && !S.form && S.screen !== "types" && !typing && document.visibilityState !== "hidden") load(true);
+    if (!S.editing && !S.gate && !S.form && !S.teamEdit && S.screen !== "types" && !typing && document.visibilityState !== "hidden") load(true);
   }, 10000);
   document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") load(true); });
 }
