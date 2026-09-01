@@ -307,6 +307,45 @@ export default async function (req, res) {
       return res.status(200).json({ t, db });
     }
 
+    if (a === "updateTeam" || a === "removeTeam") {
+      const tour = find(body.tournamentId);
+      if (!tour) return res.status(404).json({ error: "no such tournament" });
+      if (tour.locked) return res.status(423).json({ error: "this tournament is locked" });
+      const ev = (tour.events || []).find(e => e.id === body.eventId);
+      if (!ev) return res.status(404).json({ error: "no such event" });
+      ev.teams = Array.isArray(ev.teams) ? ev.teams : [];
+      const i = parseInt(body.index, 10);
+      if (!(i >= 0 && i < ev.teams.length)) return res.status(404).json({ error: "no such entry" });
+      const pc = Math.max(1, ev.poolCount || 1);
+      if (a === "removeTeam") {
+        const pool = Math.min(pc - 1, Math.max(0, ev.teams[i].pool || 0));
+        ev.teams.splice(i, 1);
+        // Pool match ids are positional, so that pool's results no longer line up.
+        ev.results = ev.results || {};
+        for (const k of Object.keys(ev.results)) if (k.indexOf(`P${pool}-`) === 0) delete ev.results[k];
+      } else {
+        const type = (db.eventTypes || []).find(x => x.id === ev.eventTypeId);
+        const single = type ? !!type.singles : false;
+        const name = clean(body.name, 40), p1 = clean(body.p1, 40), p2 = clean(body.p2, 40);
+        if (!name || !p1 || (!single && !p2)) return res.status(400).json({ error: "name and player(s) required" });
+        const lower = s => String(s).toLowerCase();
+        if (ev.teams.some((t, j) => j !== i && lower(t.name) === lower(name))) return res.status(409).json({ error: "that team name is already taken" });
+        const before = Math.min(pc - 1, Math.max(0, ev.teams[i].pool || 0));
+        const pool = Math.min(pc - 1, Math.max(0, parseInt(body.pool, 10) || 0));
+        ev.teams[i].name = name;
+        ev.teams[i].players = single ? [p1] : [p1, p2];
+        if (pool !== before) {
+          ev.teams[i].pool = pool;
+          ev.results = ev.results || {};
+          for (const k of Object.keys(ev.results)) {
+            if (k.indexOf(`P${before}-`) === 0 || k.indexOf(`P${pool}-`) === 0) delete ev.results[k];
+          }
+        }
+      }
+      const t = await writeDb(db);
+      return res.status(200).json({ t, db });
+    }
+
     if (a === "score" || a === "clearScore") {
       const tour = find(body.tournamentId);
       if (!tour) return res.status(404).json({ error: "no such tournament" });
