@@ -350,6 +350,14 @@ document.addEventListener("click", function (e) {
     var tt = tour(); S.evId = tt && tt.events && tt.events[0] ? tt.events[0].id : null;
     window.scrollTo(0, 0); return render();
   }
+  if (act === "openreg") {
+    S.tourId = val; S.screen = "event"; S.tab = "teams"; S.menu = null;
+    var to = tour(), open = evsOf(to).filter(function (x) {
+      return x.regOpen !== false && (!x.maxTeams || (x.teams || []).length < x.maxTeams);
+    })[0];
+    S.evId = (open || evsOf(to)[0] || {}).id || null;
+    window.scrollTo(0, 0); return render();
+  }
   if (act === "pickev") { S.evId = val; S.editing = null; window.scrollTo(0, 0); return render(); }  if (act === "home") { S.screen = "home"; S.tourId = null; S.evId = null; S.menu = null; S.form = null; window.scrollTo(0, 0); return render(); }
   if (act === "tab") { S.tab = val; S.editing = null; window.scrollTo(0, 0); return render(); }
   if (act === "new") return openNew();

@@ -54,8 +54,7 @@ function viewHome() {
       '<button class="tmain" data-act="open" data-val="' + t.id + '">' +
         '<div class="trow"><div class="tname">' + esc(t.name) + '</div>' +
         (S.db.defaultId === t.id ? '<span class="pill">Default</span>' : '') +
-        (anyLive ? '<span class="pill live">Live</span>' : '') +
-        (regOn && !anyLive ? '<span class="pill open">Entries open</span>' : '') + '</div>' +
+        (anyLive ? '<span class="pill live">Live</span>' : '') + '</div>' +
         '<div class="tmeta">' + esc(when(t)) + '</div>' +
         '<div class="chips">' + (evs.length ? evs.map(function (e) {
           return '<span class="chip">' + esc(typeName(e.eventTypeId)) + '</span>';
@@ -64,6 +63,7 @@ function viewHome() {
         '<div class="tfoot"><span class="tstat' + (status === "In progress" ? " on" : "") + '">' + status + '</span>' +
         '<span class="tprog">' + done + ' / ' + sched + ' matches</span></div>' +
       '</button>' +
+      (regOn ? '<button class="regcta" data-act="openreg" data-val="' + t.id + '">Entries open · Register a team →</button>' : '') +
       '<button class="tmenu" data-act="menu" data-val="' + t.id + '">⋯</button>' +
       (S.menu === t.id ? menu(t) : '') +
     '</div>';
