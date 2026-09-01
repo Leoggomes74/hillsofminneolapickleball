@@ -202,6 +202,7 @@ function sanitizeTournament(body, existing) {
     id: existing ? existing.id : `${slug(body.name)}-${Date.now().toString(36).slice(-4)}`,
     name: clean(body.name, 60) || "Untitled tournament",
     director: clean(body.director, 60),
+    fee: clean(body.fee, 40),
     date: clean(body.date, 10),
     time: clean(body.time, 5),
     events: events.length ? events : prev,
