@@ -1,13 +1,14 @@
-// Vercel serverless function — multi-tournament store.
+// Vercel serverless function — multi-tournament / multi-event store.
 //
 // GET  /api/data                          -> { t, db }
 // POST /api/data { action, pin, ... }     -> { t, db }
-//   actions: score, clearScore, create, update, remove, restore, duplicate,
-//            lock, setDefault, purge
+//   tournament: create, update, remove, restore, duplicate, lock, setDefault, purge
+//   event type: addEventType, renameEventType, removeEventType
+//   scores:     score, clearScore   (require eventId)
+//   open:       note                (no passcode) / removeNote (passcode)
 //
-// Storage: Vercel KV / Upstash Redis REST API. Env vars come from the store
-// integration: KV_REST_API_URL + KV_REST_API_TOKEN, or UPSTASH_REDIS_REST_*.
-// SCORE_PASSCODE gates every write (defaults to 2074).
+// Storage: Vercel KV / Upstash Redis REST API.
+// SCORE_PASSCODE gates every write except `note` (defaults to 2074).
 
 const URL_ = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
 const TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -28,6 +29,14 @@ async function kv(command) {
   return (await r.json()).result;
 }
 
+const DEFAULT_TYPES = [
+  { id: "mens-singles", name: "Men's Singles", singles: true },
+  { id: "womens-singles", name: "Women's Singles", singles: true },
+  { id: "mens-doubles", name: "Men's Doubles", singles: false },
+  { id: "womens-doubles", name: "Women's Doubles", singles: false },
+  { id: "mixed-doubles", name: "Mixed Doubles", singles: false }
+];
+
 const HILLS_TEAMS = [
   ["Arepa con Pitorro", ["Jaime Morales", "Georgina"]],
   ["Caribe Smash", ["Rafael", "Jean"]],
@@ -42,7 +51,6 @@ const HILLS_TEAMS = [
 ];
 
 // Old ids (GA1…GB10, SF1, SF2, B3, F1..F3) -> new deterministic ids.
-// Group A teams are indexes 0-4, Group B 5-9, in the order above.
 const LEGACY_MAP = (() => {
   const order = {
     GA1: [0, 1], GA2: [2, 3], GA3: [0, 4], GA4: [1, 2], GA5: [3, 4],
@@ -64,19 +72,23 @@ function hillsTournament(results) {
   return {
     id: "hills-2026",
     name: "Hills of Minneola Mixed Doubles",
-    category: "Mixed doubles",
+    director: "",
     date: "2026-08-30",
     time: "08:00",
-    poolCount: 2,
-    director: "",
-    knockout: true,
-    poolFormat: "to11win1",
-    koFormat: "to11win2",
-    finalFormat: "bo3to11",
-    teams: HILLS_TEAMS.map(([name, players], i) => ({
-      name, players, pool: i < 5 ? 0 : 1
-    })),
-    results: results || {},
+    events: [{
+      id: "ev-hills-1",
+      eventTypeId: "mixed-doubles",
+      date: "2026-08-30",
+      time: "08:00",
+      poolCount: 2,
+      knockout: true,
+      poolFormat: "to11win1",
+      koFormat: "to11win2",
+      finalFormat: "bo3to11",
+      teams: HILLS_TEAMS.map(([name, players], i) => ({ name, players, pool: i < 5 ? 0 : 1 })),
+      results: results || {}
+    }],
+    notes: [],
     locked: false,
     archived: false,
     createdAt: Date.now()
@@ -91,7 +103,38 @@ function migrate(legacyRaw) {
     const id = LEGACY_MAP[k];
     if (id) results[id] = v;
   }
-  return { tournaments: [hillsTournament(results)], defaultId: "hills-2026", v: 2 };
+  return { tournaments: [hillsTournament(results)], eventTypes: DEFAULT_TYPES.map(t => ({ ...t })), defaultId: "hills-2026", v: 3 };
+}
+
+// v2 (tournament owns teams/pools) -> v3 (tournament owns events)
+function upgrade(db) {
+  if (!Array.isArray(db.eventTypes) || !db.eventTypes.length) db.eventTypes = DEFAULT_TYPES.map(t => ({ ...t }));
+  db.eventTypes.forEach(t => { if (typeof t.singles !== "boolean") t.singles = /singles/i.test(t.name || ""); });
+  const matchType = name => {
+    const s = slug(name || "");
+    return (db.eventTypes.find(t => t.id === s) || db.eventTypes.find(t => slug(t.name) === s) || db.eventTypes[0]).id;
+  };
+  (db.tournaments || []).forEach(t => {
+    if (!Array.isArray(t.events)) {
+      t.events = [{
+        id: "ev" + Math.random().toString(36).slice(2, 8),
+        eventTypeId: matchType(t.category),
+        date: t.date || "", time: t.time || "",
+        poolCount: t.poolCount || 1,
+        knockout: t.knockout !== false,
+        poolFormat: t.poolFormat || "to11win1",
+        koFormat: t.koFormat || "to11win2",
+        finalFormat: t.finalFormat || "bo3to11",
+        teams: Array.isArray(t.teams) ? t.teams : [],
+        results: t.results || {}
+      }];
+      delete t.category; delete t.poolCount; delete t.knockout;
+      delete t.poolFormat; delete t.koFormat; delete t.finalFormat;
+      delete t.teams; delete t.results;
+    }
+  });
+  db.v = 3;
+  return db;
 }
 
 async function readDb() {
@@ -99,7 +142,12 @@ async function readDb() {
   if (raw) {
     try {
       const db = JSON.parse(raw);
-      if (db && Array.isArray(db.tournaments)) return { db, t: Number(t) || 0 };
+      if (db && Array.isArray(db.tournaments)) {
+        const before = db.v;
+        upgrade(db);
+        if (before !== 3) await writeDb(db);
+        return { db, t: Number(t) || 0 };
+      }
     } catch { /* fall through to migration */ }
   }
   const legacy = await kv(["GET", LEGACY_KEY]);
@@ -120,18 +168,17 @@ async function writeDb(db) {
 const clampScore = n => Math.max(0, Math.min(99, parseInt(n, 10) || 0));
 const clean = (s, max) => String(s == null ? "" : s).slice(0, max).trim();
 const slug = s => clean(s, 40).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "event";
+const rid = p => p + Date.now().toString(36).slice(-4) + Math.random().toString(36).slice(2, 5);
 
-function sanitizeTournament(body, existing) {
+function sanitizeEvent(body, existing) {
   const teams = Array.isArray(body.teams) ? body.teams.slice(0, 32).map((t, i) => ({
     name: clean(t && t.name, 40) || `Team ${i + 1}`,
     players: (Array.isArray(t && t.players) ? t.players : []).slice(0, 2).map(p => clean(p, 40)).filter(Boolean),
     pool: Math.max(0, Math.min(7, parseInt(t && t.pool, 10) || 0))
   })) : [];
   return {
-    id: existing ? existing.id : `${slug(body.name)}-${Date.now().toString(36).slice(-4)}`,
-    name: clean(body.name, 60) || "Untitled tournament",
-    category: clean(body.category, 30) || "Mixed doubles",
-    director: clean(body.director, 60),
+    id: existing ? existing.id : rid("ev"),
+    eventTypeId: slug(body.eventTypeId || "mixed-doubles"),
     date: clean(body.date, 10),
     time: clean(body.time, 5),
     poolCount: Math.max(1, Math.min(8, parseInt(body.poolCount, 10) || 1)),
@@ -140,7 +187,23 @@ function sanitizeTournament(body, existing) {
     koFormat: clean(body.koFormat, 12) || "to11win2",
     finalFormat: clean(body.finalFormat, 12) || "to11win2",
     teams,
-    results: existing ? existing.results || {} : {},
+    results: existing ? existing.results || {} : {}
+  };
+}
+
+function sanitizeTournament(body, existing) {
+  const prev = existing ? (existing.events || []) : [];
+  const events = (Array.isArray(body.events) ? body.events : []).slice(0, 12)
+    .map(e => sanitizeEvent(e, prev.find(p => p.id === (e && e.id))));
+  return {
+    id: existing ? existing.id : `${slug(body.name)}-${Date.now().toString(36).slice(-4)}`,
+    name: clean(body.name, 60) || "Untitled tournament",
+    director: clean(body.director, 60),
+    date: clean(body.date, 10),
+    time: clean(body.time, 5),
+    events: events.length ? events : prev,
+    order: Array.isArray(body.order) ? body.order.slice(0, 600).map(k => clean(k, 60)) : (existing ? existing.order || [] : []),
+    notes: existing ? existing.notes || [] : [],
     locked: existing ? !!existing.locked : false,
     archived: existing ? !!existing.archived : false,
     createdAt: existing ? existing.createdAt : Date.now()
@@ -167,7 +230,34 @@ export default async function (req, res) {
 
     const { db } = await readDb();
     const find = id => db.tournaments.find(x => x.id === id);
+    const findEv = (tour, id) => (tour.events || []).find(e => e.id === id) || (tour.events || [])[0];
     const a = body.action;
+
+    // ---- event type table ---------------------------------------------------
+    if (a === "addEventType" || a === "renameEventType" || a === "removeEventType") {
+      db.eventTypes = Array.isArray(db.eventTypes) ? db.eventTypes : DEFAULT_TYPES.map(t => ({ ...t }));
+      if (a === "addEventType") {
+        const name = clean(body.name, 40);
+        if (!name) return res.status(400).json({ error: "name required" });
+        let id = slug(name);
+        while (db.eventTypes.some(t => t.id === id)) id = id + "-2";
+        db.eventTypes.push({ id, name, singles: !!body.singles });
+      } else if (a === "renameEventType") {
+        const cur = db.eventTypes.find(t => t.id === body.id);
+        if (!cur) return res.status(404).json({ error: "no such event type" });
+        const name = clean(body.name, 40);
+        if (!name) return res.status(400).json({ error: "name required" });
+        cur.name = name;
+        if (typeof body.singles === "boolean") cur.singles = body.singles;
+      } else {
+        const used = db.tournaments.some(t => (t.events || []).some(e => e.eventTypeId === body.id));
+        if (used) return res.status(409).json({ error: "event type is in use" });
+        db.eventTypes = db.eventTypes.filter(t => t.id !== body.id);
+        if (!db.eventTypes.length) return res.status(409).json({ error: "keep at least one event type" });
+      }
+      const t = await writeDb(db);
+      return res.status(200).json({ t, db });
+    }
 
     if (a === "note" || a === "removeNote") {
       const tour = find(body.tournamentId);
@@ -190,11 +280,13 @@ export default async function (req, res) {
       const tour = find(body.tournamentId);
       if (!tour) return res.status(404).json({ error: "no such tournament" });
       if (tour.locked) return res.status(423).json({ error: "tournament locked" });
+      const ev = findEv(tour, body.eventId);
+      if (!ev) return res.status(404).json({ error: "no such event" });
       const id = clean(body.id, 24).replace(/[^A-Za-z0-9#-]/g, "");
       if (!id) return res.status(400).json({ error: "missing match id" });
-      tour.results = tour.results || {};
-      if (a === "clearScore") delete tour.results[id];
-      else tour.results[id] = { a: clampScore(body.a), b: clampScore(body.b), status: body.status === "live" ? "live" : "done" };
+      ev.results = ev.results || {};
+      if (a === "clearScore") delete ev.results[id];
+      else ev.results[id] = { a: clampScore(body.a), b: clampScore(body.b), status: body.status === "live" ? "live" : "done" };
     } else if (a === "create") {
       const t = sanitizeTournament(body.tournament || {}, null);
       db.tournaments.push(t);
@@ -211,7 +303,9 @@ export default async function (req, res) {
       const copy = JSON.parse(JSON.stringify(cur));
       copy.id = `${slug(cur.name)}-${Date.now().toString(36).slice(-4)}`;
       copy.name = clean(body.name, 60) || `${cur.name} (copy)`;
-      copy.results = {};
+      copy.order = [];
+      (copy.events || []).forEach(e => { e.id = rid("ev"); e.results = {}; });
+      copy.notes = [];
       copy.locked = false;
       copy.archived = false;
       copy.createdAt = Date.now();
@@ -227,6 +321,10 @@ export default async function (req, res) {
       const cur = find(body.tournamentId);
       if (!cur) return res.status(404).json({ error: "no such tournament" });
       cur.locked = !!body.locked;
+    } else if (a === "setOrder") {
+      const cur = find(body.tournamentId);
+      if (!cur) return res.status(404).json({ error: "no such tournament" });
+      cur.order = (Array.isArray(body.order) ? body.order : []).slice(0, 600).map(k => clean(k, 60));
     } else if (a === "setDefault") {
       db.defaultId = body.tournamentId || null;
     } else {
