@@ -141,7 +141,7 @@ function viewForm() {
     (f.step === 1 ? "Tournament" : f.step === 2 ? "Event types" : "Entries") + '</div></div></div>';
 
   if (f.step === 1) {
-    h += '<div class="fnote top">Master data for the whole tournament. Each event type you add next carries its own date, pools, format and roster.</div>';
+    h += '<div class="fnote top">Master data for the whole tournament. Each event type you add next carries its own date, pools, format and roster — and can be left empty for players to register themselves.</div>';
     h += '<div class="fsec"><label>Tournament name</label><input type="text" data-field="name" value="' + esc(f.name) + '" placeholder="e.g. Hills of Minneola Fall Classic"></div>';
     h += '<div class="fsec"><label>Tournament director</label><input type="text" data-field="director" value="' + esc(f.director) + '" placeholder="Who runs the event"></div>';
     h += '<div class="fsec two"><div><label>Start date</label><input type="date" data-field="date" value="' + esc(f.date) + '"></div>' +
@@ -166,8 +166,8 @@ function viewForm() {
       if (e.regOpen) {
         h += '<div class="fsec"><label>Maximum entries (0 = no limit)</label><input type="number" min="0" max="32" data-ef="' + i + ':maxTeams" value="' + (e.maxTeams || 0) + '"></div>';
       }
-      h += '<div class="fnote">' + e.teamCount + ' ' + (single ? 'players' : 'teams') + ' in ' + e.poolCount + ' pool' + (e.poolCount > 1 ? 's' : '') +
-        ' — round robin inside each pool, ' + roundRobinCount(e) + ' matches.</div>';
+      h += '<div class="fnote">' + (e.teamCount ? e.teamCount + ' ' + (single ? 'players' : 'teams') : 'No entries yet') + ' in ' + e.poolCount + ' pool' + (e.poolCount > 1 ? 's' : '') +
+        (e.teamCount ? ' — round robin inside each pool, ' + roundRobinCount(e) + ' matches.' : ' — the schedule builds itself as people register.') + '</div>';
       h += '<div class="fsec"><label>Pool game format</label>' + selectEl("data-ef", i + ":poolFormat", e.poolFormat, fmtOpts) + '</div>';
       h += '<div class="fsec check"><label><input type="checkbox" data-ef="' + i + ':knockout"' + (e.knockout ? ' checked' : '') + '> Play a knockout stage</label>' +
         '<div class="fnote">' + knockoutBlurb(e) + '</div></div>';
@@ -178,11 +178,15 @@ function viewForm() {
       h += '</div>';
     });
     h += '<button class="fbtn ghost wide" data-act="addev">+ Add another event type</button>';
+    if (f.events.every(function (e) { return e.regOpen; })) {
+      h += '<div class="fnote">Every event above is open for self-registration, so you can finish here and let players enter themselves.</div>';
+      h += '<button class="fbtn wide" data-act="formsubmit">' + (f.mode === "new" ? "Create — players register themselves" : "Save — players register themselves") + '</button>';
+    }
     if (f.error) h += '<div class="ferr">' + esc(f.error) + '</div>';
     h += '<div class="facts"><button class="fbtn ghost" data-act="step" data-val="1">‹ Back</button>' +
-      '<button class="fbtn" data-act="step" data-val="3">Next: entries →</button></div>';
+      '<button class="fbtn ghost" data-act="step" data-val="3">Add entries now →</button></div>';
   } else {
-    h += '<div class="fnote top">Name every entry, per event. Tap a pool letter to move an entry.</div>';
+    h += '<div class="fnote top">Optional — leave an event empty and players will register themselves. Tap a pool letter to move an entry.</div>';
     f.events.forEach(function (e, ei) {
       var single = typeSingles(e.eventTypeId);
       var poolOpts = [];

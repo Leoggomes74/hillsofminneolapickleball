@@ -204,7 +204,7 @@ function blankEvent(typeId) {
   return {
     id: null, eventTypeId: typeId || (types()[0] || {}).id || "mixed-doubles",
     date: "", time: "08:00",
-    teamCount: 8, poolCount: 2, knockout: true,
+    teamCount: 0, poolCount: 2, knockout: true,
     regOpen: true, maxTeams: 0,
     poolFormat: "to11win1", koFormat: "to11win2", finalFormat: "bo3to11",
     teams: []
@@ -217,7 +217,6 @@ function blankForm() {
     events: [blankEvent()], step: 1, error: ""
   };
   f.events[0].date = f.date;
-  syncTeamRows(f.events[0]);
   return f;
 }
 // Grow/shrink the entry list without destroying pool assignments people already have.
@@ -274,24 +273,31 @@ function formValid(f) {
   if (!String(f.name).trim()) return "Give the tournament a name.";
   if (!f.events.length) return "Add at least one event type to this tournament.";
   var seen = {}, err = "";
-  f.events.forEach(function (e, ei) {
+  f.events.forEach(function (e) {
     if (err) return;
     if (seen[e.eventTypeId]) { err = "Each event type can only be added once per tournament."; return; }
     seen[e.eventTypeId] = 1;
     var single = typeSingles(e.eventTypeId), bad = 0;
-    e.teams.forEach(function (t) {
+    filledRows(e).forEach(function (t) {
       if (!String(t.name).trim()) bad++;
       if (!String(t.players[0]).trim()) bad++;
       if (!single && !String(t.players[1]).trim()) bad++;
     });
     if (bad) { err = typeName(e.eventTypeId) + ": " + (single ? "every entry needs a name and a player." : "every team needs a name and two players."); return; }
     if (e.regOpen) return;                       // registration will fill the pools
-    if (!e.teams.length) { err = typeName(e.eventTypeId) + ": add entries or leave registration open."; return; }
+    var rows = filledRows(e);
+    if (!rows.length) { err = typeName(e.eventTypeId) + ": add entries, or switch registration on so people can enter themselves."; return; }
     var counts = {}, i;
-    for (i = 0; i < e.teams.length; i++) counts[e.teams[i].pool] = (counts[e.teams[i].pool] || 0) + 1;
+    for (i = 0; i < rows.length; i++) counts[rows[i].pool] = (counts[rows[i].pool] || 0) + 1;
     for (i = 0; i < e.poolCount; i++) if ((counts[i] || 0) < 2) { err = typeName(e.eventTypeId) + ": each pool needs at least two teams."; return; }
   });
   return err;
+}
+// Wholly blank rows are simply dropped, so an event can be created empty.
+function filledRows(e) {
+  return e.teams.filter(function (t) {
+    return String(t.name).trim() || String(t.players[0]).trim() || String(t.players[1] || "").trim();
+  });
 }
 function submitForm() {
   var f = S.form; if (!f) return;
@@ -306,7 +312,7 @@ function submitForm() {
         poolCount: parseInt(e.poolCount, 10) || 1, knockout: !!e.knockout,
         regOpen: !!e.regOpen, maxTeams: parseInt(e.maxTeams, 10) || 0,
         poolFormat: e.poolFormat, koFormat: e.koFormat, finalFormat: e.finalFormat,
-        teams: e.teams.map(function (t) {
+        teams: filledRows(e).map(function (t) {
           return { name: t.name.trim(), pool: t.pool, registered: t.registered || 0, players: single ? [t.players[0].trim()] : [t.players[0].trim(), t.players[1].trim()] };
         })
       };
@@ -438,7 +444,7 @@ document.addEventListener("click", function (e) {
     var free = types().filter(function (x) { return !used[x.id]; })[0];
     if (!free) { toast("Every event type is already added"); return; }
     var ne = blankEvent(free.id); ne.date = S.form.date; ne.time = S.form.time;
-    syncTeamRows(ne); S.form.events.push(ne); S.form.error = ""; return render();
+    S.form.events.push(ne); S.form.error = ""; return render();
   }
   if (act === "delev") {
     if (S.form.events.length < 2) { toast("A tournament needs one event"); return; }
