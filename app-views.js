@@ -91,6 +91,7 @@ function viewHome() {
 function menu(t) {
   var items = [];
   items.push(['edit', 'Edit setup & events']);
+  items.push(['invite', 'Invitation image']);
   items.push(['duplicate', 'Duplicate']);
   if (S.db.defaultId !== t.id) items.push(['default', 'Open by default']);
   items.push([t.locked ? 'unlock' : 'lock', t.locked ? 'Unlock scoring' : 'Lock scoring']);
@@ -593,6 +594,7 @@ function tabInfo(t, e, v) {
   h += sec("Registration fee", t.fee
     ? '<b>' + esc(t.fee) + '</b>, payable to the Tournament Organization.'
     : 'No entry fee for this tournament.');
+  h += '<button class="fbtn ghost wide" data-act="invite" data-val="' + t.id + '">✉ Generate invitation image</button>';
   h += '<div class="lbl rule">Events</div>';
   evs.forEach(function (x) {
     var xv = TModel.build(x);
@@ -711,10 +713,15 @@ function render() {
   var h = "";
   if (S.screen === "home") h = viewHome();
   else if (S.screen === "print") h = viewPrint();
+  else if (S.screen === "invite") h = viewInvite();
   else if (S.screen === "types") h = viewTypes();
   else if (S.screen === "new" || S.screen === "edit") h = S.form ? viewForm() : viewHome();
   else h = viewEvent();
   h += sheet() + teamSheet() + gate() + confirmBox();
   if (S.toast) h += '<div class="toast"><span>' + esc(S.toast) + '</span></div>';
   document.getElementById("app").innerHTML = h;
+  if (S.screen === "invite") {
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawInvite);
+    else setTimeout(drawInvite, 0);
+  }
 }

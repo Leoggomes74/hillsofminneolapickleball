@@ -399,6 +399,10 @@ document.addEventListener("click", function (e) {
   }
   if (act === "tognewsingles") { S.newType.singles = !S.newType.singles; return render(); }
 
+  if (act === "invite") { if (val) S.tourId = val; S.screen = "invite"; S.menu = null; window.scrollTo(0, 0); return render(); }
+  if (act === "backevent") { S.screen = "event"; window.scrollTo(0, 0); return render(); }
+  if (act === "invdl") return downloadInvite();
+  if (act === "invshare") return shareInvite();
   if (act === "openprint") { S.screen = "print"; S.menu = null; window.scrollTo(0, 0); return render(); }
   if (act === "backsched") { S.screen = "event"; S.tab = "sched"; window.scrollTo(0, 0); return render(); }
   if (act === "doprint") { window.print(); return; }
@@ -619,7 +623,7 @@ if (CLOUD) {
   setInterval(function () {
     var ae = document.activeElement;
     var typing = ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName);
-    if (!S.editing && !S.gate && !S.form && !S.teamEdit && S.screen !== "types" && !typing && document.visibilityState !== "hidden") load(true);
+    if (!S.editing && !S.gate && !S.form && !S.teamEdit && S.screen !== "types" && S.screen !== "invite" && !typing && document.visibilityState !== "hidden") load(true);
   }, 10000);
   document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") load(true); });
 }
