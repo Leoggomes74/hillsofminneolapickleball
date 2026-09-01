@@ -22,6 +22,7 @@ var S = {
   reg: { team: "", p1: "", p2: "" },
   regBusy: false,
   teamEdit: null,
+  inv: null,
   typeDraft: {}, newType: { name: "", singles: false }
 };
 
@@ -402,6 +403,8 @@ document.addEventListener("click", function (e) {
   if (act === "invite") { if (val) S.tourId = val; S.screen = "invite"; S.menu = null; window.scrollTo(0, 0); return render(); }
   if (act === "backevent") { S.screen = "event"; window.scrollTo(0, 0); return render(); }
   if (act === "invdl") return downloadInvite();
+  if (act === "invreset") return needPin(resetInv);
+  if (act === "invunlock") return needPin(function () { render(); });
   if (act === "invshare") return shareInvite();
   if (act === "openprint") { S.screen = "print"; S.menu = null; window.scrollTo(0, 0); return render(); }
   if (act === "backsched") { S.screen = "event"; S.tab = "sched"; window.scrollTo(0, 0); return render(); }
@@ -549,7 +552,7 @@ document.addEventListener("click", function (e) {
 });
 
 document.addEventListener("input", function (e) {
-  var el = e.target.closest("[data-field],[data-ef],[data-num],[data-team],[data-note],[data-tf],[data-nt],[data-reg],[data-tform]");
+  var el = e.target.closest("[data-field],[data-ef],[data-num],[data-team],[data-note],[data-tf],[data-nt],[data-reg],[data-tform],[data-inv]");
   if (!el) return;
   if (el.hasAttribute("data-num")) {
     var raw = el.value.replace(/[^0-9]/g, "").slice(0, 2);
@@ -564,6 +567,10 @@ document.addEventListener("input", function (e) {
   if (el.hasAttribute("data-note")) { S.note[el.getAttribute("data-note")] = el.value; return; }
   if (el.hasAttribute("data-reg")) { S.reg[el.getAttribute("data-reg")] = el.value; return; }
   if (el.hasAttribute("data-tform")) { S.teamEdit[el.getAttribute("data-tform")] = el.value; return; }
+  if (el.hasAttribute("data-inv")) {
+    if (S.inv && S.unlocked) { S.inv[el.getAttribute("data-inv")] = el.value; saveInv(); drawInvite(); }
+    return;
+  }
   if (el.hasAttribute("data-nt")) { S.newType.name = el.value; return; }
   if (el.hasAttribute("data-tf")) {
     var tid = el.getAttribute("data-tf");

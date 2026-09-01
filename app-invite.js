@@ -102,6 +102,33 @@ function invDate(t) {
   };
 }
 
+var INV_LKEY = "hom.invite";
+function invStore() { try { return JSON.parse(localStorage.getItem(INV_LKEY) || "{}"); } catch (e) { return {}; } }
+function invDefaults(t) {
+  var th = invTheme(t);
+  return { kicker: "You are invited", line: th.line, cta: "Register on the tournament app" };
+}
+function ensureInv(t) {
+  if (S.inv && S.inv.id === t.id) return S.inv;
+  var saved = invStore()[t.id] || {}, d = invDefaults(t);
+  S.inv = { id: t.id, kicker: saved.kicker != null ? saved.kicker : d.kicker,
+    line: saved.line != null ? saved.line : d.line, cta: saved.cta != null ? saved.cta : d.cta };
+  return S.inv;
+}
+function saveInv() {
+  if (!S.inv) return;
+  try {
+    var all = invStore();
+    all[S.inv.id] = { kicker: S.inv.kicker, line: S.inv.line, cta: S.inv.cta };
+    localStorage.setItem(INV_LKEY, JSON.stringify(all));
+  } catch (e) {}
+}
+function resetInv() {
+  var t = tour(); if (!t) return;
+  try { var all = invStore(); delete all[t.id]; localStorage.setItem(INV_LKEY, JSON.stringify(all)); } catch (e) {}
+  S.inv = null; ensureInv(t); render();
+}
+
 function drawInvite() {
   var cv = document.getElementById("invcanvas");
   var t = tour();
@@ -109,7 +136,7 @@ function drawInvite() {
   var ctx = cv.getContext("2d");
   cv.width = INV_W; cv.height = INV_H;
   var th = invTheme(t), rnd = invRand(t.name + t.id);
-  var evs = evsOf(t);
+  var evs = evsOf(t), inv = ensureInv(t);
 
   ctx.fillStyle = th.bg; ctx.fillRect(0, 0, INV_W, INV_H);
   invMotif(ctx, th, rnd, -20, 520, 26);
@@ -125,7 +152,7 @@ function drawInvite() {
   ctx.fillStyle = th.accent;
   ctx.font = "800 27px Archivo, sans-serif";
   ctx.letterSpacing = "10px";
-  ctx.fillText("YOU ARE INVITED", x, y);
+  ctx.fillText(String(inv.kicker || "").toUpperCase(), x, y);
   ctx.letterSpacing = "0px";
 
   y += 34;
@@ -204,7 +231,9 @@ function drawInvite() {
   y = panelTop + panelH + 62;
   ctx.fillStyle = th.ink;
   ctx.font = "600 31px Archivo, sans-serif";
-  invWrap(ctx, th.line, wide).forEach(function (ln) { ctx.fillText(ln, x, y); y += 42; });
+  String(inv.line || "").split(/\n+/).forEach(function (para) {
+    invWrap(ctx, para, wide).forEach(function (ln) { ctx.fillText(ln, x, y); y += 42; });
+  });
 
   var footY = INV_H - M - 150;
   ctx.fillStyle = th.soft; ctx.globalAlpha = 0.3;
@@ -220,7 +249,7 @@ function drawInvite() {
   }
   ctx.fillStyle = th.ink;
   ctx.font = "800 30px Archivo, sans-serif";
-  ctx.fillText("Register on the tournament app", x, footY + (t.fee ? 52 : 10));
+  ctx.fillText(String(inv.cta || ""), x, footY + (t.fee ? 52 : 10));
   if (t.director) {
     ctx.fillStyle = th.soft;
     ctx.font = "600 24px Archivo, sans-serif";
@@ -260,13 +289,23 @@ function shareInvite() {
 function viewInvite() {
   var t = tour();
   if (!t) return viewHome();
-  var th = invTheme(t);
+  var th = invTheme(t), inv = ensureInv(t);
   var h = '<div class="hd"><button class="back" data-act="backevent">‹</button>' +
     '<div class="hdmain"><h1>Invitation</h1><div class="sub">' + esc(th.season) + ' · letter format</div></div></div>';
-  h += '<div class="fnote top">Built from this tournament’s own details and themed to match its name. Save the image, then attach it in WhatsApp.</div>';
+  h += '<div class="fnote top">Built from this tournament’s own details and themed to match its name. Edit the wording below — the poster redraws as you type — then save or share it.</div>';
   h += '<div class="invwrap"><canvas id="invcanvas" aria-label="Tournament invitation"></canvas></div>';
   h += '<div class="facts"><button class="fbtn ghost" data-act="invdl">Save image</button>' +
     '<button class="fbtn" data-act="invshare">Share →</button></div>';
-  h += '<div class="empty small">Edit the tournament name, dates, events or fee and the invitation redraws itself. Seasonal words in the title — fall, winter, spring, summer, night, classic — pick the artwork.</div>';
+  h += '<div class="lbl rule">Wording</div>';
+  if (!S.unlocked) {
+    h += '<div class="empty small">The wording is set by the organizers. Anyone can save or share this invitation.</div>';
+    h += '<button class="fbtn ghost wide" data-act="invunlock">🔒 Enter passcode to edit wording</button>';
+  } else {
+    h += '<div class="fsec"><label>Opening line</label><input type="text" data-inv="kicker" value="' + esc(inv.kicker) + '" maxlength="32" placeholder="You are invited"></div>';
+    h += '<div class="fsec"><label>Message</label><textarea data-inv="line" rows="3" maxlength="240" placeholder="Say something that makes people want to play">' + esc(inv.line) + '</textarea></div>';
+    h += '<div class="fsec"><label>Call to action</label><input type="text" data-inv="cta" value="' + esc(inv.cta) + '" maxlength="48" placeholder="Register on the tournament app"></div>';
+    h += '<button class="fbtn ghost wide" data-act="invreset">Reset to suggested wording</button>';
+  }
+  h += '<div class="empty small">The name, dates, events and fee come straight from the tournament — edit those in the setup form. Seasonal words in the title (fall, winter, spring, summer, night, classic) pick the artwork.</div>';
   return h + '<div class="pad"></div>';
 }
