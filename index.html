@@ -323,6 +323,56 @@ html,body{background:#fff}
 .tedit{border:2px solid var(--n3);background:transparent;color:var(--n7);font-weight:800;font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:7px 10px;min-height:36px;flex:none}
 .tedit:hover{background:#e7f1e5;border-color:var(--green);color:var(--green)}
 .pad{height:28px}
+/* ---- responsive: phone -> tablet -> desktop ---- */
+.tlist,.gwrap,.kowrap,.secwrap{display:grid}
+@media (min-width:700px){
+#app{max-width:760px;padding-bottom:104px}
+.hd{padding:16px 22px}
+.hd h1{font-size:23px}
+.bar{padding:14px 22px}
+.bar h2{font-size:25px}
+.lbl,.snap,.empty,.sec,.fsec,.fnote,.cmt,.team,.res,.next,.strow,.sthead,.mrow,.hl,.mini,.trow2,.erow,.ttrow,.note,.regh,.regsub{padding-left:22px;padding-right:22px}
+.cta,.fbtn.wide,.live,.sf,.award,.podium,.ktile,.kpi{margin-left:22px;margin-right:22px;width:auto}
+.cta{width:calc(100% - 44px)}
+.tmain{padding:16px 58px 16px 22px}
+.tlist{grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:0;background:transparent;border-top:2px solid var(--div)}
+.tcard{border-top:0;border-bottom:2px solid var(--div);border-right:2px solid var(--div);background:var(--bg)}
+.gwrap{grid-template-columns:1fr 1fr;gap:0;background:transparent}
+.gblock{background:var(--bg);border-right:2px solid var(--div)}
+.gwrap>.gblock:nth-child(2n),.gwrap>.gblock:last-child{border-right:0}
+.kowrap{grid-template-columns:1fr 1fr;gap:0}
+.kowrap .sf{margin-left:22px;margin-right:0}
+.kowrap .sf+.sf{margin-left:11px;margin-right:22px}
+.secwrap{display:block;columns:2;column-gap:0;column-rule:2px solid var(--div);background:transparent}
+.secwrap .sec{background:var(--bg);border-bottom:2px solid var(--div);break-inside:avoid}
+.nav>div{max-width:760px}
+.nav button{font-size:10.5px;padding:16px 2px 18px}
+.back2,.menuwrap{align-items:center}
+.sheet,.menusheet{max-width:560px;border:2px solid var(--ink);max-height:86vh}
+.psheet{padding:0 22px 22px}
+}
+@media (min-width:1080px){
+#app{max-width:1120px}
+.hd{padding:20px 28px}
+.hd h1{font-size:27px}
+.bar h2{font-size:28px}
+.lbl,.snap,.empty,.sec,.fsec,.fnote,.cmt,.team,.res,.next,.strow,.sthead,.mrow,.hl,.mini,.trow2,.erow,.ttrow,.note,.regh,.regsub,.bar{padding-left:28px;padding-right:28px}
+.cta,.fbtn.wide,.live,.sf,.award,.podium,.ktile,.kpi{margin-left:28px;margin-right:28px}
+.cta{width:calc(100% - 56px)}
+.tmain{padding:18px 58px 18px 28px}
+.tlist{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+.kpi{grid-template-columns:repeat(4,1fr)}
+.kowrap .sf{margin-left:28px}
+.kowrap .sf+.sf{margin-left:14px;margin-right:28px}
+.nav>div{max-width:1120px}
+.psheet{padding:0 28px 28px}
+.prow{grid-template-columns:32px 1fr 140px}
+.pbx i{width:32px;height:28px}
+}
+@media (min-width:1080px) and (min-height:640px){
+.evbar{gap:2px}
+.evchip{min-width:0;flex:1 1 0}
+}
 </style>
 </head>
 <body>

@@ -39,6 +39,7 @@ function viewHome() {
   if (!live.length) {
     h += '<div class="empty">No tournaments yet. Create one, add its event types, and every schedule, pool and bracket builds itself.</div>';
   }
+  h += '<div class="tlist">';
   live.forEach(function (t) {
     var evs = evsOf(t), done = 0, sched = 0, entries = 0, anyLive = false;
     evs.forEach(function (e) {
@@ -75,7 +76,7 @@ function viewHome() {
     '</div>';
   });
   if (archived.length) {
-    h += '<div class="lbl rule">Archived</div>';
+    h += '</div><div class="lbl rule">Archived</div><div class="tlist">';
     archived.forEach(function (t) {
       h += '<div class="tcard arch"><button class="tmain" data-act="open" data-val="' + t.id + '">' +
         '<div class="tname">' + esc(t.name) + '</div><div class="tmeta">' + esc(when(t)) + '</div></button>' +
@@ -83,7 +84,7 @@ function viewHome() {
         (S.menu === t.id ? menu(t) : '') + '</div>';
     });
   }
-  h += '<div class="pad"></div>';
+  h += '</div><div class="pad"></div>';
   return h;
 }
 
@@ -402,10 +403,11 @@ function tabSched(t, cur, v) {
   return h + '<div class="pad"></div>';
 }
 
-function tabGroups(t, e, v) {  var h = "";
+function tabGroups(t, e, v) {  var h = '<div class="gwrap">';
   v.tables.forEach(function (rows, pi) {
     var pg = v.pool.filter(function (m) { return m.pool === pi; });
     var played = pg.filter(function (m) { return m.status === "done"; }).length;
+    h += '<div class="gblock">';
     h += '<div class="bar"><h2>' + (v.tables.length > 1 ? 'Group ' + L(pi) : 'Standings') + '</h2><div class="meta">' + played + ' of ' + pg.length + ' played</div></div>';
     h += '<div class="sthead"><div>#</div><div>Team</div><div class="r">W</div><div class="r">L</div><div class="r">Diff</div></div>';
     rows.forEach(function (r) {
@@ -414,9 +416,9 @@ function tabGroups(t, e, v) {  var h = "";
     });
     h += '<div class="lbl">' + (v.tables.length > 1 ? 'Group ' + L(pi) + ' matches' : 'Matches') + '</div>';
     pg.forEach(function (m) { h += matchRow(m, "mrow"); });
-    h += '<div class="pad"></div>';
+    h += '</div>';
   });
-  return h;
+  return h + '</div><div class="pad"></div>';
 }
 function advances(e, v, poolIndex, pos) {
   if (!e.knockout) return pos === 1;
@@ -431,7 +433,7 @@ function tabBracket(t, e, v) {
   if (!ko) return '<div class="bar"><h2>Knockout</h2></div><div class="empty">This event is pool play only — the winner is top of the table.</div>';
   var h = '<div class="bar"><h2>Knockout</h2><div class="meta">' + (ko.seeded ? "Seeded" : "Awaiting pool results") + '</div></div>';
   h += '<div class="lbl">Semifinals · ' + TModel.fmtLabel(e.koFormat) + '</div>';
-  h += koCard(t, ko.sf[0]) + koCard(t, ko.sf[1]);
+  h += '<div class="kowrap">' + koCard(t, ko.sf[0]) + koCard(t, ko.sf[1]) + '</div>';
   h += '<div class="lbl rule">Third place · ' + TModel.fmtLabel(e.koFormat) + '</div>' + koCard(t, ko.bronze);
   if (ko.third) h += '<div class="award">Third place · ' + esc(ko.third) + '</div>';
   h += '<div class="lbl rule">Final · ' + TModel.fmtLabel(e.finalFormat) + '</div>';
@@ -599,6 +601,7 @@ function tabInfo(t, e, v) {
     (e.teams || []).length + ' ' + (single ? 'players' : 'teams') +
     (v.tables.length > 1 ? ' in ' + v.tables.length + ' pools (' + counts.join(', ') + ')' : ' in a single pool') +
     '. Everyone plays everyone in their pool: ' + v.pool.length + ' pool matches' + (e.knockout ? ' plus four knockout matches' : '') + '.');
+  h += '<div class="secwrap">';
   h += sec("Scoring", 'Pool games: ' + TModel.fmtLabel(e.poolFormat).toLowerCase() + '.' +
     (e.knockout ? ' Semifinals and third place: ' + TModel.fmtLabel(e.koFormat).toLowerCase() + '. Final: ' + TModel.fmtLabel(e.finalFormat).toLowerCase() + '.' : '') +
     ' Traditional side-out scoring — only the serving team scores. Call the score out loud before every serve.');
@@ -613,6 +616,7 @@ function tabInfo(t, e, v) {
   h += sec("Safety — Florida heat", 'Drink water every round and wear sunscreen. Dizziness, nausea or confusion means stop playing and find the Tournament Director. Call “ball on court” to stop a rally when a stray ball comes through.', true);
   h += sec("Who can change what", 'Anyone can read every event and leave a comment on the Say page. Entering scores, creating or editing tournaments, adding event types and moderating comments all need the organizer passcode.');
   h += sec("Tournament Director", (t.director ? '<b>' + esc(t.director) + '</b> is directing this tournament. ' : '') + 'Protests go to the TD verbally, immediately after the incident. The TD has final say on scheduling, weather and every dispute. Anything not covered here follows USAPA rules.');
+  h += '</div>';
   return h + '<div class="pad"></div>';
 }
 function sec(title, body, accent) {
