@@ -19,6 +19,8 @@ var S = {
   confirm: null,
   note: { who: "", text: "" },
   noteBusy: false,
+  reg: { team: "", p1: "", p2: "" },
+  regBusy: false,
   typeDraft: {}, newType: { name: "", singles: false }
 };
 
@@ -203,6 +205,7 @@ function blankEvent(typeId) {
     id: null, eventTypeId: typeId || (types()[0] || {}).id || "mixed-doubles",
     date: "", time: "08:00",
     teamCount: 8, poolCount: 2, knockout: true,
+    regOpen: true, maxTeams: 0,
     poolFormat: "to11win1", koFormat: "to11win2", finalFormat: "bo3to11",
     teams: []
   };
@@ -217,12 +220,27 @@ function blankForm() {
   syncTeamRows(f.events[0]);
   return f;
 }
+// Grow/shrink the entry list without destroying pool assignments people already have.
 function syncTeamRows(e) {
-  var n = Math.max(2, Math.min(32, parseInt(e.teamCount, 10) || 2));
+  var n = Math.max(0, Math.min(32, parseInt(e.teamCount, 10)));
+  if (isNaN(n)) n = 0;
   e.teamCount = n;
-  while (e.teams.length < n) e.teams.push({ name: "", players: ["", ""] });
-  e.teams.length = n;
-  var pools = TModel.assignPools(n, Math.max(1, Math.min(8, parseInt(e.poolCount, 10) || 1)));
+  var pc = Math.max(1, Math.min(8, parseInt(e.poolCount, 10) || 1));
+  while (e.teams.length > n) e.teams.pop();
+  while (e.teams.length < n) e.teams.push({ name: "", players: ["", ""], pool: smallestPool(e.teams, pc) });
+  e.teams.forEach(function (t) { t.pool = Math.min(pc - 1, Math.max(0, t.pool || 0)); });
+}
+function smallestPool(teams, pc) {
+  var counts = [], i;
+  for (i = 0; i < pc; i++) counts.push(0);
+  teams.forEach(function (t) { counts[Math.min(pc - 1, Math.max(0, t.pool || 0))]++; });
+  var best = 0;
+  for (i = 1; i < pc; i++) if (counts[i] < counts[best]) best = i;
+  return best;
+}
+// Full snake redistribute — only on an explicit "redistribute" tap.
+function rebalance(e) {
+  var pools = TModel.assignPools(e.teams.length, Math.max(1, Math.min(8, parseInt(e.poolCount, 10) || 1)));
   e.teams.forEach(function (t, i) { t.pool = pools[i]; });
 }
 function openNew() {
@@ -239,9 +257,10 @@ function openEdit(id) {
         return {
           id: e.id, eventTypeId: e.eventTypeId, date: e.date || "", time: e.time || "",
           teamCount: (e.teams || []).length, poolCount: e.poolCount || 1, knockout: e.knockout !== false,
+          regOpen: e.regOpen !== false, maxTeams: e.maxTeams || 0,
           poolFormat: e.poolFormat, koFormat: e.koFormat, finalFormat: e.finalFormat,
           teams: (e.teams || []).map(function (x) {
-            return { name: x.name, players: [(x.players || [])[0] || "", (x.players || [])[1] || ""], pool: x.pool || 0 };
+            return { name: x.name, players: [(x.players || [])[0] || "", (x.players || [])[1] || ""], pool: x.pool || 0, registered: x.registered || 0 };
           })
         };
       }),
@@ -266,6 +285,8 @@ function formValid(f) {
       if (!single && !String(t.players[1]).trim()) bad++;
     });
     if (bad) { err = typeName(e.eventTypeId) + ": " + (single ? "every entry needs a name and a player." : "every team needs a name and two players."); return; }
+    if (e.regOpen) return;                       // registration will fill the pools
+    if (!e.teams.length) { err = typeName(e.eventTypeId) + ": add entries or leave registration open."; return; }
     var counts = {}, i;
     for (i = 0; i < e.teams.length; i++) counts[e.teams[i].pool] = (counts[e.teams[i].pool] || 0) + 1;
     for (i = 0; i < e.poolCount; i++) if ((counts[i] || 0) < 2) { err = typeName(e.eventTypeId) + ": each pool needs at least two teams."; return; }
@@ -283,9 +304,10 @@ function submitForm() {
       return {
         id: e.id, eventTypeId: e.eventTypeId, date: e.date || f.date, time: e.time || f.time,
         poolCount: parseInt(e.poolCount, 10) || 1, knockout: !!e.knockout,
+        regOpen: !!e.regOpen, maxTeams: parseInt(e.maxTeams, 10) || 0,
         poolFormat: e.poolFormat, koFormat: e.koFormat, finalFormat: e.finalFormat,
         teams: e.teams.map(function (t) {
-          return { name: t.name.trim(), pool: t.pool, players: single ? [t.players[0].trim()] : [t.players[0].trim(), t.players[1].trim()] };
+          return { name: t.name.trim(), pool: t.pool, registered: t.registered || 0, players: single ? [t.players[0].trim()] : [t.players[0].trim(), t.players[1].trim()] };
         })
       };
     })
@@ -357,6 +379,10 @@ document.addEventListener("click", function (e) {
   }
   if (act === "tognewsingles") { S.newType.singles = !S.newType.singles; return render(); }
 
+  if (act === "openprint") { S.screen = "print"; S.menu = null; window.scrollTo(0, 0); return render(); }
+  if (act === "backsched") { S.screen = "event"; S.tab = "sched"; window.scrollTo(0, 0); return render(); }
+  if (act === "doprint") { window.print(); return; }
+
   // ---- court order ----
   if (act === "mvup" || act === "mvdn") {
     var tm = tour(); if (!tm) return;
@@ -423,7 +449,31 @@ document.addEventListener("click", function (e) {
     S.form.events[+bits[0]].teams[+bits[1]].pool = +bits[2];
     return render();
   }
-  if (act === "autopool") { syncTeamRows(S.form.events[+val]); return render(); }
+  if (act === "autopool") { rebalance(S.form.events[+val]); return render(); }
+  if (act === "addrow") {
+    var ea = S.form.events[+val];
+    if (ea.teams.length >= 32) { toast("32 entries is the maximum"); return; }
+    ea.teams.push({ name: "", players: ["", ""], pool: smallestPool(ea.teams, Math.max(1, +ea.poolCount || 1)) });
+    ea.teamCount = ea.teams.length; S.form.error = ""; return render();
+  }
+  if (act === "delrow") {
+    var pr = val.split(":"), ed = S.form.events[+pr[0]];
+    ed.teams.splice(+pr[1], 1); ed.teamCount = ed.teams.length; S.form.error = ""; return render();
+  }
+
+  if (act === "register") {
+    var tr = tour(), er = ev(); if (!tr || !er) return;
+    var sng = typeSingles(er.eventTypeId);
+    var team = String(S.reg.team || "").trim(), p1 = String(S.reg.p1 || "").trim(), p2 = String(S.reg.p2 || "").trim();
+    if (!team || !p1 || (!sng && !p2)) { toast(sng ? "Entry name and player needed" : "Team, your name and partner needed"); return; }
+    S.regBusy = true; render();
+    post({ action: "register", tournamentId: tr.id, eventId: er.id, team: team, p1: p1, p2: p2 }).then(function (d) {
+      S.regBusy = false;
+      if (d) { S.reg = { team: "", p1: "", p2: "" }; toast("You\u2019re in \u2014 see you on court", 2600); }
+      else render();
+    });
+    return;
+  }
 
   if (act === "lock" || act === "unlock") {
     return needPin(function () { post({ action: "lock", tournamentId: val, locked: act === "lock" }, act === "lock" ? "Locked" : "Unlocked"); S.menu = null; });
@@ -443,7 +493,7 @@ document.addEventListener("click", function (e) {
 });
 
 document.addEventListener("input", function (e) {
-  var el = e.target.closest("[data-field],[data-ef],[data-num],[data-team],[data-note],[data-tf],[data-nt]");
+  var el = e.target.closest("[data-field],[data-ef],[data-num],[data-team],[data-note],[data-tf],[data-nt],[data-reg]");
   if (!el) return;
   if (el.hasAttribute("data-num")) {
     var raw = el.value.replace(/[^0-9]/g, "").slice(0, 2);
@@ -456,6 +506,7 @@ document.addEventListener("input", function (e) {
     return;
   }
   if (el.hasAttribute("data-note")) { S.note[el.getAttribute("data-note")] = el.value; return; }
+  if (el.hasAttribute("data-reg")) { S.reg[el.getAttribute("data-reg")] = el.value; return; }
   if (el.hasAttribute("data-nt")) { S.newType.name = el.value; return; }
   if (el.hasAttribute("data-tf")) {
     var tid = el.getAttribute("data-tf");
@@ -472,6 +523,7 @@ document.addEventListener("input", function (e) {
   if (el.hasAttribute("data-ef")) {
     var b = el.getAttribute("data-ef").split(":"), evf = S.form.events[+b[0]], key = b[1];
     if (key === "knockout") { evf.knockout = el.checked; return render(); }
+    if (key === "regOpen") { evf.regOpen = el.checked; return render(); }
     if (key === "teamCount" || key === "poolCount") { evf[key] = el.value; syncTeamRows(evf); return render(); }
     evf[key] = el.value;
     if (key === "eventTypeId") return render();
@@ -485,6 +537,7 @@ document.addEventListener("change", function (e) {
   if (!el) return;
   var b = el.getAttribute("data-ef").split(":"), evf = S.form.events[+b[0]], key = b[1];
   if (key === "knockout") { evf.knockout = el.checked; return render(); }
+  if (key === "regOpen") { evf.regOpen = el.checked; return render(); }
   evf[key] = el.value;
   render();
 });
