@@ -11,6 +11,15 @@ var FORMAT_KEYS = ["to11win1", "to11win2", "to15win2", "bo3to11"];
 var CATEGORIES = ["Mixed doubles", "Men's doubles", "Women's doubles", "Men's singles", "Women's singles"];
 var POOL_LETTERS = "ABCDEFGH";
 
+// Seed rows for the maintainable Event Type table.
+var DEFAULT_TYPES = [
+  { id: "mens-singles", name: "Men's Singles", singles: true },
+  { id: "womens-singles", name: "Women's Singles", singles: true },
+  { id: "mens-doubles", name: "Men's Doubles", singles: false },
+  { id: "womens-doubles", name: "Women's Doubles", singles: false },
+  { id: "mixed-doubles", name: "Mixed Doubles", singles: false }
+];
+
 function isSingles(cat) { return /singles/i.test(cat || ""); }
 function fmt(key) { return FORMATS[key] || FORMATS.to11win1; }
 function fmtLabel(key) { return fmt(key).label; }
@@ -226,7 +235,7 @@ function knockout(tour, matches, tables) {
   };
 }
 
-// Everything a view needs for one tournament.
+// Everything a view needs for ONE tournament-event (teams, pools, results, formats).
 function build(tour) {
   var raw = poolMatches(tour);
   var pool = raw.map(function (m) { return decorate(tour, m); });
@@ -244,8 +253,54 @@ function build(tour) {
   };
 }
 
+// ---- tournament-wide court order ------------------------------------------
+// All events share the same courts, so the whole tournament gets ONE sequence.
+// Auto order: pool matches interleaved round-robin across events, then the
+// knockout matches stage by stage (all semis, all third places, all finals).
+function autoOrder(tour) {
+  var evs = (tour && tour.events) || [], pools = [], kos = [];
+  evs.forEach(function (e) {
+    var v = build(e);
+    pools.push(v.pool.map(function (m) { return e.id + "|" + m.id; }));
+    kos.push(v.ko ? ["SF1", "SF2", "BR", "FN"].map(function (id) { return e.id + "|" + id; }) : []);
+  });
+  var out = [], i, k, most = 0;
+  pools.forEach(function (q) { most = Math.max(most, q.length); });
+  for (i = 0; i < most; i++) for (k = 0; k < pools.length; k++) if (pools[k][i]) out.push(pools[k][i]);
+  for (i = 0; i < 4; i++) for (k = 0; k < kos.length; k++) if (kos[k][i]) out.push(kos[k][i]);
+  return out;
+}
+
+// Stored order wins; unknown keys are dropped and new matches appended.
+function orderKeys(tour) {
+  var auto = autoOrder(tour), ok = {}, seen = {}, out = [];
+  auto.forEach(function (k) { ok[k] = 1; });
+  ((tour && tour.order) || []).forEach(function (k) {
+    if (ok[k] && !seen[k]) { seen[k] = 1; out.push(k); }
+  });
+  auto.forEach(function (k) { if (!seen[k]) { seen[k] = 1; out.push(k); } });
+  return out;
+}
+
+// [{ key, ev, m }] in court order, numbered 1..n across the whole tournament.
+function master(tour) {
+  var evs = (tour && tour.events) || [], views = {};
+  evs.forEach(function (e) { views[e.id] = build(e); });
+  var out = [];
+  orderKeys(tour).forEach(function (key) {
+    var cut = key.indexOf("|"), eid = key.slice(0, cut), mid = key.slice(cut + 1);
+    var v = views[eid]; if (!v) return;
+    var m = v.byId[mid]; if (!m) return;
+    var e = evs.filter(function (x) { return x.id === eid; })[0];
+    out.push({ key: key, ev: e, m: m, court: out.length + 1 });
+  });
+  return out;
+}
+
 window.TModel = {
   FORMATS: FORMATS, FORMAT_KEYS: FORMAT_KEYS, CATEGORIES: CATEGORIES, POOL_LETTERS: POOL_LETTERS,
+  DEFAULT_TYPES: DEFAULT_TYPES,
   isSingles: isSingles, fmt: fmt, fmtLabel: fmtLabel, assignPools: assignPools, poolsOf: poolsOf,
-  build: build, gameIds: gameIds, standings: standings
+  build: build, gameIds: gameIds, standings: standings,
+  autoOrder: autoOrder, orderKeys: orderKeys, master: master
 };

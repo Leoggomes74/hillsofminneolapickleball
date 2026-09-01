@@ -5,10 +5,11 @@ var LKEY = "hom.db";
 var CLOUD = location.protocol !== "file:";
 
 var S = {
-  screen: "home",           // home | event | new | edit
+  screen: "home",           // home | event | new | edit | types
   tab: "now",
   tourId: null,
-  db: { tournaments: [], defaultId: null },
+  evId: null,
+  db: { tournaments: [], eventTypes: [], defaultId: null },
   sync: CLOUD ? "loading" : "local",
   toast: "",
   unlocked: false, pinUsed: "", gate: null, gateThen: null, pin: "", bad: false,
@@ -17,17 +18,42 @@ var S = {
   form: null,
   confirm: null,
   note: { who: "", text: "" },
-  noteBusy: false
+  noteBusy: false,
+  typeDraft: {}, newType: { name: "", singles: false }
 };
 
 try { S.unlocked = sessionStorage.getItem("hom.unlocked") === "1"; } catch (e) {}
 try { S.pinUsed = sessionStorage.getItem("hom.pin") || ""; } catch (e) {}
 try { var c = localStorage.getItem(LKEY); if (c) S.db = JSON.parse(c); } catch (e) {}
 
+// ---- shape guards ----------------------------------------------------------
+function upgradeDb(db) {
+  if (!db || !Array.isArray(db.tournaments)) return db;
+  if (!Array.isArray(db.eventTypes) || !db.eventTypes.length) {
+    db.eventTypes = TModel.DEFAULT_TYPES.map(function (t) { return { id: t.id, name: t.name, singles: t.singles }; });
+  }
+  db.tournaments.forEach(function (t) {
+    if (!Array.isArray(t.events)) {
+      var sl = String(t.category || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      var hit = db.eventTypes.filter(function (x) { return x.id === sl; })[0] || db.eventTypes[0];
+      t.events = [{
+        id: "ev" + Math.random().toString(36).slice(2, 8),
+        eventTypeId: hit.id, date: t.date || "", time: t.time || "",
+        poolCount: t.poolCount || 1, knockout: t.knockout !== false,
+        poolFormat: t.poolFormat || "to11win1", koFormat: t.koFormat || "to11win2", finalFormat: t.finalFormat || "bo3to11",
+        teams: t.teams || [], results: t.results || {}
+      }];
+    }
+  });
+  return db;
+}
+
 // Offline / first-run fallback so the app is never an empty shell.
 if (!S.db || !Array.isArray(S.db.tournaments) || !S.db.tournaments.length) {
-  S.db = { tournaments: [demoTournament()], defaultId: "hills-2026", v: 2 };
+  S.db = { tournaments: [demoTournament()], eventTypes: TModel.DEFAULT_TYPES.map(function (t) { return { id: t.id, name: t.name, singles: t.singles }; }), defaultId: "hills-2026", v: 3 };
 }
+upgradeDb(S.db);
+
 function demoTournament() {
   var roster = [
     ["Arepa con Pitorro", ["Jaime Morales", "Georgina"]], ["Caribe Smash", ["Rafael", "Jean"]],
@@ -37,11 +63,15 @@ function demoTournament() {
     ["Macho Camacho", ["Crystal", "Marcus"]], ["R&B", ["Rola", "Balbino"]]
   ];
   return {
-    id: "hills-2026", name: "Hills of Minneola Mixed Doubles", category: "Mixed doubles",
-    date: "2026-08-30", time: "08:00", poolCount: 2, knockout: true, director: "",
-    poolFormat: "to11win1", koFormat: "to11win2", finalFormat: "bo3to11",
-    teams: roster.map(function (r, i) { return { name: r[0], players: r[1], pool: i < 5 ? 0 : 1 }; }),
-    results: {}, locked: false, archived: false, createdAt: Date.now()
+    id: "hills-2026", name: "Hills of Minneola Mixed Doubles", director: "",
+    date: "2026-08-30", time: "08:00",
+    events: [{
+      id: "ev-hills-1", eventTypeId: "mixed-doubles", date: "2026-08-30", time: "08:00",
+      poolCount: 2, knockout: true, poolFormat: "to11win1", koFormat: "to11win2", finalFormat: "bo3to11",
+      teams: roster.map(function (r, i) { return { name: r[0], players: r[1], pool: i < 5 ? 0 : 1 }; }),
+      results: {}
+    }],
+    notes: [], locked: false, archived: false, createdAt: Date.now()
   };
 }
 
@@ -50,6 +80,19 @@ function tours(includeArchived) {
   return (S.db.tournaments || []).filter(function (t) { return includeArchived || !t.archived; });
 }
 function tour() { return (S.db.tournaments || []).filter(function (t) { return t.id === S.tourId; })[0] || null; }
+function evsOf(t) { return (t && t.events) || []; }
+function ev() {
+  var t = tour(); if (!t) return null;
+  var list = evsOf(t);
+  return list.filter(function (e) { return e.id === S.evId; })[0] || list[0] || null;
+}
+function types() { return S.db.eventTypes || []; }
+function typeOf(id) { return types().filter(function (x) { return x.id === id; })[0] || null; }
+function typeName(id) { var x = typeOf(id); return x ? x.name : "Event"; }
+function typeSingles(id) { var x = typeOf(id); return x ? !!x.singles : false; }
+function typeInUse(id) {
+  return (S.db.tournaments || []).some(function (t) { return evsOf(t).some(function (e) { return e.eventTypeId === id; }); });
+}
 function toast(msg, ms) { S.toast = msg; render(); setTimeout(function () { S.toast = ""; render(); }, ms || 2000); }
 
 // ---- api -------------------------------------------------------------------
@@ -58,11 +101,8 @@ function load(quiet) {
   return fetch(API, { cache: "no-store" })
     .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(function (d) {
-      if (d && d.db) { S.db = d.db; cacheDb(); }
+      if (d && d.db) { S.db = upgradeDb(d.db); cacheDb(); }
       S.sync = "live";
-      if (!S.tourId && S.screen === "home" && S.db.defaultId && tours().length) {
-        // don't auto-navigate; the picker highlights the default instead
-      }
       render(); return true;
     })
     .catch(function () { S.sync = "offline"; if (!quiet) render(); return false; });
@@ -74,18 +114,21 @@ function post(payload, okMsg) {
   return fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
     .then(function (r) {
       if (r.status === 401) { S.unlocked = false; S.pinUsed = ""; try { sessionStorage.removeItem("hom.unlocked"); sessionStorage.removeItem("hom.pin"); } catch (e) {} throw new Error("passcode"); }
+      if (r.status === 409) return r.json().then(function (j) { throw new Error(j.error || "not allowed"); });
       if (!r.ok) throw new Error(r.status);
       return r.json();
     })
     .then(function (d) {
-      if (d && d.db) { S.db = d.db; cacheDb(); }
+      if (d && d.db) { S.db = upgradeDb(d.db); cacheDb(); }
       S.sync = "live";
       if (okMsg) toast(okMsg); else render();
       return d;
     })
     .catch(function (e) {
+      var m = String(e.message);
+      if (m !== "passcode" && !/^\d+$/.test(m)) { toast(m, 2600); return null; }
       S.sync = "offline";
-      toast(String(e.message) === "passcode" ? "Passcode rejected" : "Not saved online", 2600);
+      toast(m === "passcode" ? "Passcode rejected" : "Not saved online", 2600);
       return null;
     });
 }
@@ -113,10 +156,10 @@ function pinKey(k) {
 
 // ---- score sheet -----------------------------------------------------------
 function openSheet(id) {
-  var t = tour(); if (!t) return;
+  var t = tour(), e = ev(); if (!t || !e) return;
   if (t.locked) { toast("Tournament is locked"); return; }
   needPin(function () {
-    var v = TModel.build(t), m = v.byId[id];
+    var v = TModel.build(e), m = v.byId[id];
     if (!m || !m.ready) return;
     S.editing = id;
     S.draft = m.games.map(function (g) { return { a: g.a, b: g.b, played: g.status !== "upcoming" }; });
@@ -124,8 +167,8 @@ function openSheet(id) {
   });
 }
 function saveSheet(status) {
-  var t = tour(); if (!t) return;
-  var v = TModel.build(t), m = v.byId[S.editing];
+  var t = tour(), e = ev(); if (!t || !e) return;
+  var v = TModel.build(e), m = v.byId[S.editing];
   if (!m) { S.editing = null; return render(); }
   var ids = TModel.gameIds({ id: m.id, fmtKey: m.fmtKey });
   var jobs = [];
@@ -133,9 +176,9 @@ function saveSheet(status) {
     var d = S.draft[i];
     if (!d) return;
     var blank = !d.a && !d.b;
-    if (blank && !d.played) return;                       // never entered — skip
-    if (blank && d.played) { jobs.push({ action: "clearScore", tournamentId: t.id, id: gid }); return; }
-    jobs.push({ action: "score", tournamentId: t.id, id: gid, a: d.a, b: d.b, status: status });
+    if (blank && !d.played) return;
+    if (blank && d.played) { jobs.push({ action: "clearScore", tournamentId: t.id, eventId: e.id, id: gid }); return; }
+    jobs.push({ action: "score", tournamentId: t.id, eventId: e.id, id: gid, a: d.a, b: d.b, status: status });
   });
   S.editing = null; render();
   (function next(i) {
@@ -144,80 +187,107 @@ function saveSheet(status) {
   })(0);
 }
 function clearMatch() {
-  var t = tour(); if (!t) return;
-  var v = TModel.build(t), m = v.byId[S.editing];
+  var t = tour(), e = ev(); if (!t || !e) return;
+  var v = TModel.build(e), m = v.byId[S.editing];
   var ids = m ? TModel.gameIds({ id: m.id, fmtKey: m.fmtKey }) : [];
   S.editing = null; render();
   (function next(i) {
     if (i >= ids.length) { toast("Result removed"); return; }
-    post({ action: "clearScore", tournamentId: t.id, id: ids[i] }).then(function () { next(i + 1); });
+    post({ action: "clearScore", tournamentId: t.id, eventId: e.id, id: ids[i] }).then(function () { next(i + 1); });
   })(0);
 }
 
 // ---- create / edit form ---------------------------------------------------
-function blankForm() {
+function blankEvent(typeId) {
   return {
-    mode: "new", id: null,
-    name: "", category: TModel.CATEGORIES[0], director: "",
-    date: new Date().toISOString().slice(0, 10), time: "08:00",
+    id: null, eventTypeId: typeId || (types()[0] || {}).id || "mixed-doubles",
+    date: "", time: "08:00",
     teamCount: 8, poolCount: 2, knockout: true,
     poolFormat: "to11win1", koFormat: "to11win2", finalFormat: "bo3to11",
-    teams: [], step: 1, error: ""
+    teams: []
   };
 }
-function syncTeamRows(f) {
-  var n = Math.max(2, Math.min(32, parseInt(f.teamCount, 10) || 2));
-  f.teamCount = n;
-  while (f.teams.length < n) f.teams.push({ name: "", players: ["", ""] });
-  f.teams.length = n;
-  var pools = TModel.assignPools(n, Math.max(1, Math.min(8, parseInt(f.poolCount, 10) || 1)));
-  f.teams.forEach(function (t, i) { t.pool = pools[i]; });
+function blankForm() {
+  var f = {
+    mode: "new", id: null, name: "", director: "",
+    date: new Date().toISOString().slice(0, 10), time: "08:00",
+    events: [blankEvent()], step: 1, error: ""
+  };
+  f.events[0].date = f.date;
+  syncTeamRows(f.events[0]);
+  return f;
+}
+function syncTeamRows(e) {
+  var n = Math.max(2, Math.min(32, parseInt(e.teamCount, 10) || 2));
+  e.teamCount = n;
+  while (e.teams.length < n) e.teams.push({ name: "", players: ["", ""] });
+  e.teams.length = n;
+  var pools = TModel.assignPools(n, Math.max(1, Math.min(8, parseInt(e.poolCount, 10) || 1)));
+  e.teams.forEach(function (t, i) { t.pool = pools[i]; });
 }
 function openNew() {
-  needPin(function () { S.form = blankForm(); syncTeamRows(S.form); S.screen = "new"; window.scrollTo(0, 0); render(); });
+  needPin(function () { S.form = blankForm(); S.screen = "new"; window.scrollTo(0, 0); render(); });
 }
 function openEdit(id) {
   needPin(function () {
     var t = (S.db.tournaments || []).filter(function (x) { return x.id === id; })[0];
     if (!t) return;
     S.form = {
-      mode: "edit", id: t.id, name: t.name, category: t.category, director: t.director || "",
+      mode: "edit", id: t.id, name: t.name, director: t.director || "",
       date: t.date || "", time: t.time || "",
-      teamCount: (t.teams || []).length, poolCount: t.poolCount || 1, knockout: t.knockout !== false,
-      poolFormat: t.poolFormat, koFormat: t.koFormat, finalFormat: t.finalFormat,
-      teams: (t.teams || []).map(function (x) {
-        return { name: x.name, players: [(x.players || [])[0] || "", (x.players || [])[1] || ""], pool: x.pool || 0 };
+      events: evsOf(t).map(function (e) {
+        return {
+          id: e.id, eventTypeId: e.eventTypeId, date: e.date || "", time: e.time || "",
+          teamCount: (e.teams || []).length, poolCount: e.poolCount || 1, knockout: e.knockout !== false,
+          poolFormat: e.poolFormat, koFormat: e.koFormat, finalFormat: e.finalFormat,
+          teams: (e.teams || []).map(function (x) {
+            return { name: x.name, players: [(x.players || [])[0] || "", (x.players || [])[1] || ""], pool: x.pool || 0 };
+          })
+        };
       }),
       step: 1, error: ""
     };
+    if (!S.form.events.length) { S.form.events = [blankEvent()]; syncTeamRows(S.form.events[0]); }
     S.screen = "edit"; S.menu = null; window.scrollTo(0, 0); render();
   });
 }
 function formValid(f) {
   if (!String(f.name).trim()) return "Give the tournament a name.";
-  var single = TModel.isSingles(f.category), bad = 0;
-  f.teams.forEach(function (t) {
-    if (!String(t.name).trim()) bad++;
-    if (!String(t.players[0]).trim()) bad++;
-    if (!single && !String(t.players[1]).trim()) bad++;
+  if (!f.events.length) return "Add at least one event type to this tournament.";
+  var seen = {}, err = "";
+  f.events.forEach(function (e, ei) {
+    if (err) return;
+    if (seen[e.eventTypeId]) { err = "Each event type can only be added once per tournament."; return; }
+    seen[e.eventTypeId] = 1;
+    var single = typeSingles(e.eventTypeId), bad = 0;
+    e.teams.forEach(function (t) {
+      if (!String(t.name).trim()) bad++;
+      if (!String(t.players[0]).trim()) bad++;
+      if (!single && !String(t.players[1]).trim()) bad++;
+    });
+    if (bad) { err = typeName(e.eventTypeId) + ": " + (single ? "every entry needs a name and a player." : "every team needs a name and two players."); return; }
+    var counts = {}, i;
+    for (i = 0; i < e.teams.length; i++) counts[e.teams[i].pool] = (counts[e.teams[i].pool] || 0) + 1;
+    for (i = 0; i < e.poolCount; i++) if ((counts[i] || 0) < 2) { err = typeName(e.eventTypeId) + ": each pool needs at least two teams."; return; }
   });
-  if (bad) return single ? "Every entry needs a name and a player." : "Every team needs a name and two players.";
-  var counts = {}, i;
-  for (i = 0; i < f.teams.length; i++) counts[f.teams[i].pool] = (counts[f.teams[i].pool] || 0) + 1;
-  for (i = 0; i < f.poolCount; i++) if ((counts[i] || 0) < 2) return "Each pool needs at least two teams.";
-  return "";
+  return err;
 }
 function submitForm() {
   var f = S.form; if (!f) return;
   var err = formValid(f);
   if (err) { f.error = err; render(); return; }
-  var single = TModel.isSingles(f.category);
   var payload = {
-    name: f.name, category: f.category, director: String(f.director || "").trim(), date: f.date, time: f.time,
-    poolCount: parseInt(f.poolCount, 10) || 1, knockout: !!f.knockout,
-    poolFormat: f.poolFormat, koFormat: f.koFormat, finalFormat: f.finalFormat,
-    teams: f.teams.map(function (t) {
-      return { name: t.name.trim(), pool: t.pool, players: single ? [t.players[0].trim()] : [t.players[0].trim(), t.players[1].trim()] };
+    name: f.name, director: String(f.director || "").trim(), date: f.date, time: f.time,
+    events: f.events.map(function (e) {
+      var single = typeSingles(e.eventTypeId);
+      return {
+        id: e.id, eventTypeId: e.eventTypeId, date: e.date || f.date, time: e.time || f.time,
+        poolCount: parseInt(e.poolCount, 10) || 1, knockout: !!e.knockout,
+        poolFormat: e.poolFormat, koFormat: e.koFormat, finalFormat: e.finalFormat,
+        teams: e.teams.map(function (t) {
+          return { name: t.name.trim(), pool: t.pool, players: single ? [t.players[0].trim()] : [t.players[0].trim(), t.players[1].trim()] };
+        })
+      };
     })
   };
   var newMode = f.mode === "new";
@@ -229,10 +299,11 @@ function submitForm() {
         var list = S.db.tournaments || [];
         var made = list[list.length - 1];
         S.tourId = made ? made.id : null;
+        S.evId = made && made.events && made.events[0] ? made.events[0].id : null;
         S.screen = S.tourId ? "event" : "home";
         S.tab = "teams";
       } else {
-        S.tourId = f.id; S.screen = "event";
+        S.tourId = f.id; S.evId = null; S.screen = "event";
       }
       window.scrollTo(0, 0);
       toast(newMode ? "Tournament created" : "Changes saved");
@@ -244,17 +315,73 @@ document.addEventListener("click", function (e) {
   var t = e.target.closest("[data-act]");
   if (!t) return;
   var act = t.getAttribute("data-act"), val = t.getAttribute("data-val");
-  // Backdrops only close when the backdrop itself is clicked.
   if (t.hasAttribute("data-back") && e.target !== t) return;
 
-  if (act === "open") { S.tourId = val; S.screen = "event"; S.tab = "now"; S.menu = null; window.scrollTo(0, 0); return render(); }
-  if (act === "home") { S.screen = "home"; S.tourId = null; S.menu = null; S.form = null; window.scrollTo(0, 0); return render(); }
+  if (act === "open") {
+    S.tourId = val; S.screen = "event"; S.tab = "now"; S.menu = null;
+    var tt = tour(); S.evId = tt && tt.events && tt.events[0] ? tt.events[0].id : null;
+    window.scrollTo(0, 0); return render();
+  }
+  if (act === "pickev") { S.evId = val; S.editing = null; window.scrollTo(0, 0); return render(); }  if (act === "home") { S.screen = "home"; S.tourId = null; S.evId = null; S.menu = null; S.form = null; window.scrollTo(0, 0); return render(); }
   if (act === "tab") { S.tab = val; S.editing = null; window.scrollTo(0, 0); return render(); }
   if (act === "new") return openNew();
   if (act === "edit") return openEdit(val);
   if (act === "menu") { S.menu = S.menu === val ? null : val; return render(); }
   if (act === "closemenu") { S.menu = null; return render(); }
   if (act === "refresh") { S.sync = "loading"; render(); load(); return; }
+
+  // ---- event type table ----
+  if (act === "opentypes") {
+    return needPin(function () { S.screen = "types"; S.typeDraft = {}; S.newType = { name: "", singles: false }; window.scrollTo(0, 0); render(); });
+  }
+  if (act === "addtype") {
+    var nm = String(S.newType.name || "").trim();
+    if (!nm) { toast("Name the event type"); return; }
+    return needPin(function () {
+      post({ action: "addEventType", name: nm, singles: !!S.newType.singles }, "Event type added")
+        .then(function () { S.newType = { name: "", singles: false }; render(); });
+    });
+  }
+  if (act === "savetype") {
+    var d = S.typeDraft[val];
+    if (!d || !String(d.name || "").trim()) { toast("Name cannot be empty"); return; }
+    return needPin(function () { post({ action: "renameEventType", id: val, name: d.name.trim(), singles: !!d.singles }, "Saved"); });
+  }
+  if (act === "deltype") {
+    if (typeInUse(val)) { toast("In use by a tournament", 2600); return; }
+    return needPin(function () { post({ action: "removeEventType", id: val }, "Event type removed"); });
+  }
+  if (act === "togsingles") {
+    var row = S.typeDraft[val] || (S.typeDraft[val] = { name: typeName(val), singles: typeSingles(val) });
+    row.singles = !row.singles; return render();
+  }
+  if (act === "tognewsingles") { S.newType.singles = !S.newType.singles; return render(); }
+
+  // ---- court order ----
+  if (act === "mvup" || act === "mvdn") {
+    var tm = tour(); if (!tm) return;
+    return needPin(function () {
+      var keys = TModel.orderKeys(tm), i = +val, j = act === "mvup" ? i - 1 : i + 1;
+      if (j < 0 || j >= keys.length) return;
+      var sw = keys[i]; keys[i] = keys[j]; keys[j] = sw;
+      tm.order = keys; cacheDb(); render();
+      post({ action: "setOrder", tournamentId: tm.id, order: keys });
+    });
+  }
+  if (act === "autosort") {
+    var ta = tour(); if (!ta) return;
+    return needPin(function () {
+      var keys = TModel.autoOrder(ta);
+      ta.order = keys; cacheDb(); render();
+      post({ action: "setOrder", tournamentId: ta.id, order: keys }, "Court order rebuilt");
+    });
+  }
+  if (act === "schedscore") {
+    var cut = val.indexOf("|");
+    S.evId = val.slice(0, cut);
+    return openSheet(val.slice(cut + 1));
+  }
+
   if (act === "postnote") {
     var who = String(S.note.who || "").trim(), text = String(S.note.text || "").trim();
     if (!who || !text) { toast("Add your name and a comment"); return; }
@@ -280,12 +407,23 @@ document.addEventListener("click", function (e) {
   if (act === "step") { S.form.step = parseInt(val, 10); S.form.error = ""; window.scrollTo(0, 0); return render(); }
   if (act === "formcancel") { S.form = null; S.screen = S.tourId ? "event" : "home"; return render(); }
   if (act === "formsubmit") return submitForm();
+  if (act === "addev") {
+    var used = {}; S.form.events.forEach(function (x) { used[x.eventTypeId] = 1; });
+    var free = types().filter(function (x) { return !used[x.id]; })[0];
+    if (!free) { toast("Every event type is already added"); return; }
+    var ne = blankEvent(free.id); ne.date = S.form.date; ne.time = S.form.time;
+    syncTeamRows(ne); S.form.events.push(ne); S.form.error = ""; return render();
+  }
+  if (act === "delev") {
+    if (S.form.events.length < 2) { toast("A tournament needs one event"); return; }
+    S.form.events.splice(+val, 1); S.form.error = ""; return render();
+  }
   if (act === "pool") {
-    var bits = val.split(":"), i = +bits[0];
-    S.form.teams[i].pool = +bits[1];
+    var bits = val.split(":");
+    S.form.events[+bits[0]].teams[+bits[1]].pool = +bits[2];
     return render();
   }
-  if (act === "autopool") { syncTeamRows(S.form); return render(); }
+  if (act === "autopool") { syncTeamRows(S.form.events[+val]); return render(); }
 
   if (act === "lock" || act === "unlock") {
     return needPin(function () { post({ action: "lock", tournamentId: val, locked: act === "lock" }, act === "lock" ? "Locked" : "Unlocked"); S.menu = null; });
@@ -299,13 +437,13 @@ document.addEventListener("click", function (e) {
   if (act === "purge") {
     return needPin(function () {
       post({ action: "purge", tournamentId: val }, "Deleted");
-      S.confirm = null; if (S.tourId === val) { S.screen = "home"; S.tourId = null; }
+      S.confirm = null; if (S.tourId === val) { S.screen = "home"; S.tourId = null; S.evId = null; }
     });
   }
 });
 
 document.addEventListener("input", function (e) {
-  var el = e.target.closest("[data-field],[data-num],[data-team],[data-note]");
+  var el = e.target.closest("[data-field],[data-ef],[data-num],[data-team],[data-note],[data-tf],[data-nt]");
   if (!el) return;
   if (el.hasAttribute("data-num")) {
     var raw = el.value.replace(/[^0-9]/g, "").slice(0, 2);
@@ -317,30 +455,38 @@ document.addEventListener("input", function (e) {
     S.draft[+p[0]].played = true;
     return;
   }
-  if (el.hasAttribute("data-note")) {
-    S.note[el.getAttribute("data-note")] = el.value;
-    return;
+  if (el.hasAttribute("data-note")) { S.note[el.getAttribute("data-note")] = el.value; return; }
+  if (el.hasAttribute("data-nt")) { S.newType.name = el.value; return; }
+  if (el.hasAttribute("data-tf")) {
+    var tid = el.getAttribute("data-tf");
+    var row = S.typeDraft[tid] || (S.typeDraft[tid] = { name: typeName(tid), singles: typeSingles(tid) });
+    row.name = el.value; return;
   }
   if (el.hasAttribute("data-team")) {
     var q = el.getAttribute("data-team").split(":");
-    var row = S.form.teams[+q[0]];
-    if (q[1] === "name") row.name = el.value;
-    else row.players[+q[2]] = el.value;
+    var trow = S.form.events[+q[0]].teams[+q[1]];
+    if (q[2] === "name") trow.name = el.value;
+    else trow.players[+q[3]] = el.value;
     return;
   }
-  var f = el.getAttribute("data-field"), v = el.value;
-  if (f === "teamCount" || f === "poolCount") { S.form[f] = v; syncTeamRows(S.form); return render(); }
-  if (f === "knockout") { S.form.knockout = el.checked; return render(); }
-  if (f === "category") { S.form.category = v; return render(); }
-  S.form[f] = v;
+  if (el.hasAttribute("data-ef")) {
+    var b = el.getAttribute("data-ef").split(":"), evf = S.form.events[+b[0]], key = b[1];
+    if (key === "knockout") { evf.knockout = el.checked; return render(); }
+    if (key === "teamCount" || key === "poolCount") { evf[key] = el.value; syncTeamRows(evf); return render(); }
+    evf[key] = el.value;
+    if (key === "eventTypeId") return render();
+    return;
+  }
+  S.form[el.getAttribute("data-field")] = el.value;
 });
 
 document.addEventListener("change", function (e) {
-  var el = e.target.closest("[data-field]");
+  var el = e.target.closest("[data-ef]");
   if (!el) return;
-  var f = el.getAttribute("data-field");
-  if (f === "knockout") { S.form.knockout = el.checked; return render(); }
-  if (f === "category" || f === "poolFormat" || f === "koFormat" || f === "finalFormat") { S.form[f] = el.value; return render(); }
+  var b = el.getAttribute("data-ef").split(":"), evf = S.form.events[+b[0]], key = b[1];
+  if (key === "knockout") { evf.knockout = el.checked; return render(); }
+  evf[key] = el.value;
+  render();
 });
 
 document.addEventListener("focusin", function (e) {
@@ -367,7 +513,7 @@ if (CLOUD) {
   setInterval(function () {
     var ae = document.activeElement;
     var typing = ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName);
-    if (!S.editing && !S.gate && !S.form && !typing && document.visibilityState !== "hidden") load(true);
+    if (!S.editing && !S.gate && !S.form && S.screen !== "types" && !typing && document.visibilityState !== "hidden") load(true);
   }, 10000);
   document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") load(true); });
 }
