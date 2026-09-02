@@ -399,7 +399,9 @@ function tabSched(t, cur, v) {
     h += '<div class="' + cls + '"><div class="sno">' + r.court + '</div>' +
       '<' + (tappable ? 'button' : 'div') + ' class="sbody"' + (tappable ? ' data-act="schedscore" data-val="' + r.key + '"' : '') + '>' +
         '<div class="stop"><span class="chip ev">' + esc(typeName(r.ev.eventTypeId)) + '</span>' +
-        '<span class="sstage">' + esc(m.stageLabel) + '</span></div>' +
+        '<span class="sstage">' + esc(m.stageLabel) + '</span>' +
+        '<span class="stat ' + (m.status === "done" ? 'fin' : m.status === "live" ? 'liv' : 'opn') + '">' +
+          (m.status === "done" ? 'Finished' : m.status === "live" ? 'Live' : 'Open') + '</span></div>' +
         '<div class="steams">' + esc(m.teamA) + ' <i>v</i> ' + esc(m.teamB) + '</div>' +
         '<div class="sscore' + (m.status === "live" ? ' on' : '') + '">' + (m.status === "upcoming" ? esc(shortWhen(r.ev)) : m.scoreLine + (m.status === "live" ? ' · live' : '')) + '</div>' +
       '</' + (tappable ? 'button' : 'div') + '>' +
