@@ -342,18 +342,21 @@ function shortStage(m) {
 function viewPrint() {
   var t = tour();
   if (!t) return viewHome();
+  var all = S.schedAll !== false, cur = ev();
   var list = TModel.master(t);
+  if (!all && cur) list = list.filter(function (r) { return r.ev.id === cur.id; });
+  var scope = all ? "All events" : typeName(cur && cur.eventTypeId);
   var h = '<div class="hd noprint"><button class="back" data-act="backsched">‹</button>' +
-    '<div class="hdmain"><h1>Score sheets</h1><div class="sub">Blank · for the scorer’s table</div></div></div>';
-  h += '<div class="fnote top noprint">One line per match, in court order, with empty boxes to write the score. Print it, keep it at the table, then type the results in afterwards.</div>';
+    '<div class="hdmain"><h1>Score sheets</h1><div class="sub">Blank · ' + esc(scope) + '</div></div></div>';
+  h += '<div class="fnote top noprint">One line per match, in court order, with empty boxes to write the score. This sheet follows the filter set on the Order tab — currently <b>' + esc(scope) + '</b>. Print it, keep it at the table, then type the results in afterwards.</div>';
   h += '<div class="facts noprint"><button class="fbtn ghost" data-act="backsched">Back</button><button class="fbtn" data-act="doprint">Print</button></div>';
 
   h += '<div class="psheet"><div class="phead"><div><div class="pt">' + esc(t.name) + '</div>' +
-    '<div class="ps">' + esc(when(t)) + (t.director ? ' · TD: ' + esc(t.director) : '') + '</div></div>' +
+    '<div class="ps">' + esc(when(t)) + (t.director ? ' · TD: ' + esc(t.director) : '') + (all ? '' : ' · ' + esc(scope)) + '</div></div>' +
     '<div class="ps r">' + list.length + ' matches<br>Sheet of ____</div></div>';
 
   if (!list.length) {
-    h += '<div class="empty">No matches scheduled yet.</div></div><div class="pad"></div>';
+    h += '<div class="empty">No matches scheduled' + (all ? '' : ' for ' + esc(scope)) + ' yet.</div></div><div class="pad"></div>';
     return h;
   }
 
