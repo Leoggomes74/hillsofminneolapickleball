@@ -347,6 +347,58 @@ function shortStage(m) {
   return "Final";
 }
 
+// ---- printable team / player list ------------------------------------------
+function viewRoster() {
+  var t = tour();
+  if (!t) return viewHome();
+  var cur = ev(), all = S.rosAll !== false, evs = evsOf(t);
+  var list = all ? evs : evs.filter(function (x) { return cur && x.id === cur.id; });
+  var scope = all ? "All events" : typeName(cur && cur.eventTypeId);
+  var total = 0;
+  list.forEach(function (x) { total += (x.teams || []).length; });
+
+  var h = '<div class="hd noprint"><button class="back" data-act="backteams">‹</button>' +
+    '<div class="hdmain"><h1>Entry list</h1><div class="sub">' + esc(scope) + '</div></div></div>';
+  h += '<div class="fnote top noprint">Every entry with its players, grouped by event and pool. Print it for the registration desk.</div>';
+  if (evs.length > 1) {
+    h += '<div class="gfilter noprint"><button class="gfb' + (all ? ' on' : '') + '" data-act="rosall" data-val="1">All events</button>' +
+      '<button class="gfb' + (all ? '' : ' on') + '" data-act="rosall" data-val="0">' + esc(typeName(cur && cur.eventTypeId)) + ' only</button></div>';
+  }
+  h += '<div class="facts noprint"><button class="fbtn ghost" data-act="backteams">Back</button><button class="fbtn" data-act="doprint">Print</button></div>';
+
+  h += '<div class="psheet"><div class="phead"><div><div class="pt">' + esc(t.name) + '</div>' +
+    '<div class="ps">' + esc(when(t)) + (t.director ? ' · TD: ' + esc(t.director) : '') + '</div></div>' +
+    '<div class="ps r">' + total + ' entr' + (total === 1 ? 'y' : 'ies') + '<br>' + esc(scope) + '</div></div>';
+
+  if (!total) {
+    h += '<div class="empty">No entries yet.</div></div><div class="pad noprint"></div>';
+    return h;
+  }
+  list.forEach(function (x) {
+    var single = typeSingles(x.eventTypeId), teams = x.teams || [], pc = Math.max(1, x.poolCount || 1);
+    h += '<div class="rsec"><div class="rh"><b>' + esc(typeName(x.eventTypeId)) + '</b>' +
+      '<span>' + esc(when(x)) + ' · ' + teams.length + ' ' + (single ? 'player' : 'team') + (teams.length === 1 ? '' : 's') + '</span></div>';
+    if (!teams.length) { h += '<div class="rnone">No entries yet.</div></div>'; return; }
+    var pi, k = 0;
+    for (pi = 0; pi < pc; pi++) {
+      var inPool = teams.filter(function (q) { return (q.pool || 0) === pi; });
+      if (!inPool.length) continue;
+      if (pc > 1) h += '<div class="rpool">Group ' + L(pi) + '</div>';
+      inPool.forEach(function (q) {
+        k++;
+        h += '<div class="rrow"><div class="rn">' + k + '</div>' +
+          '<div class="rt">' + esc(q.name) + '</div>' +
+          '<div class="rp">' + esc(players(q.players) || '—') + '</div>' +
+          '<div class="rc">Paid ____</div></div>';
+      });
+    }
+    h += '</div>';
+  });
+  h += '<div class="pfoot">Check each player in at the desk and initial the line. Corrections go through the organizer on the Teams page.</div>';
+  h += '</div><div class="pad noprint"></div>';
+  return h;
+}
+
 // ---- printable blank score sheets ------------------------------------------
 function viewPrint() {
   var t = tour();
@@ -540,6 +592,7 @@ function tabTeams(t, e, v) {
         (t.locked ? '' : '<button class="tedit" data-act="editteam" data-val="' + idxOf[r.team] + '">Edit</button>') + '</div>';
     });
   });
+  h += '<button class="fbtn ghost wide" data-act="openroster">⎙ Printable ' + (single ? 'player' : 'team') + ' list</button>';
   h += '<div class="empty small">Organizers: tap <b>Edit</b> on any entry to correct names, move it to another pool or remove it — passcode required.</div>';
   h += '<div class="pad"></div>';
   return h;
@@ -785,6 +838,7 @@ function render() {
   var h = "";
   if (S.screen === "home") h = viewHome();
   else if (S.screen === "print") h = viewPrint();
+  else if (S.screen === "roster") h = viewRoster();
   else if (S.screen === "invite") h = viewInvite();
   else if (S.screen === "types") h = viewTypes();
   else if (S.screen === "new" || S.screen === "edit") h = S.form ? viewForm() : viewHome();

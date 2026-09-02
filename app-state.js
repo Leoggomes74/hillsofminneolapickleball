@@ -421,6 +421,9 @@ document.addEventListener("click", function (e) {
   if (act === "invreset") return needPin(resetInv);
   if (act === "invunlock") return needPin(function () { render(); });
   if (act === "invshare") return shareInvite();
+  if (act === "openroster") { S.screen = "roster"; S.menu = null; window.scrollTo(0, 0); return render(); }
+  if (act === "backteams") { S.screen = "event"; S.tab = "teams"; window.scrollTo(0, 0); return render(); }
+  if (act === "rosall") { S.rosAll = val === "1"; window.scrollTo(0, 0); return render(); }
   if (act === "openprint") { S.screen = "print"; S.menu = null; window.scrollTo(0, 0); return render(); }
   if (act === "backsched") { S.screen = "event"; S.tab = "sched"; window.scrollTo(0, 0); return render(); }
   if (act === "doprint") { window.print(); return; }
