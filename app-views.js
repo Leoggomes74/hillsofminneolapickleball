@@ -377,18 +377,23 @@ function viewPrint() {
 
 // ---- court order (all events, one sequence) --------------------------------
 function tabSched(t, cur, v) {
-  var list = TModel.master(t), evs = evsOf(t);
+  var full = TModel.master(t), evs = evsOf(t), all = S.schedAll !== false;
+  var list = all ? full : full.filter(function (r) { return r.ev.id === cur.id; });
   var played = list.filter(function (r) { return r.m.status === "done"; }).length;
   var h = '<div class="bar"><h2>Court order</h2><div class="meta">' + played + ' of ' + list.length + ' played</div></div>';
-  h += '<div class="fnote top">Every event shares the same courts, so this is the single running order for the whole tournament. Move a match up or down to change the sequence — organizer passcode required.</div>';
+  h += '<div class="fnote top">Every event shares the same courts, so this is the single running order for the whole tournament. Numbers are the tournament-wide court position. Move a match up or down to change the sequence — organizer passcode required.</div>';
+  if (evs.length > 1) {
+    h += '<div class="gfilter"><button class="gfb' + (all ? ' on' : '') + '" data-act="schedall" data-val="1">All events</button>' +
+      '<button class="gfb' + (all ? '' : ' on') + '" data-act="schedall" data-val="0">' + esc(typeName(cur.eventTypeId)) + ' only</button></div>';
+  }
   h += '<button class="fbtn ghost wide" data-act="autosort">Rebuild automatic order</button>';
   h += '<button class="fbtn ghost wide" data-act="openprint">⎙ Printable score sheets</button>';
   if (!list.length) return h + '<div class="empty">No matches scheduled yet.</div><div class="pad"></div>';
   h += '<div class="lbl rule">Running order</div>';
-  list.forEach(function (r, i) {
-    var m = r.m, tappable = m.ready && !t.locked;
+  list.forEach(function (r) {
+    var m = r.m, i = r.court - 1, tappable = m.ready && !t.locked;
     var cls = "srow" + (m.status === "done" ? " done" : "") + (m.status === "live" ? " onair" : "");
-    h += '<div class="' + cls + '"><div class="sno">' + (i + 1) + '</div>' +
+    h += '<div class="' + cls + '"><div class="sno">' + r.court + '</div>' +
       '<' + (tappable ? 'button' : 'div') + ' class="sbody"' + (tappable ? ' data-act="schedscore" data-val="' + r.key + '"' : '') + '>' +
         '<div class="stop"><span class="chip ev">' + esc(typeName(r.ev.eventTypeId)) + '</span>' +
         '<span class="sstage">' + esc(m.stageLabel) + '</span></div>' +
@@ -397,11 +402,13 @@ function tabSched(t, cur, v) {
       '</' + (tappable ? 'button' : 'div') + '>' +
       '<div class="smove">' +
         '<button class="mvb" data-act="mvup" data-val="' + i + '"' + (i === 0 ? ' disabled' : '') + ' aria-label="Move up">▲</button>' +
-        '<button class="mvb" data-act="mvdn" data-val="' + i + '"' + (i === list.length - 1 ? ' disabled' : '') + ' aria-label="Move down">▼</button>' +
+        '<button class="mvb" data-act="mvdn" data-val="' + i + '"' + (i === full.length - 1 ? ' disabled' : '') + ' aria-label="Move down">▼</button>' +
       '</div></div>';
   });
   if (evs.length > 1) {
-    h += '<div class="empty small">Automatic order alternates between the ' + evs.length + ' events round by round, then runs the semifinals, third-place matches and finals.</div>';
+    h += '<div class="empty small">' + (all
+      ? 'Automatic order alternates between the ' + evs.length + ' events round by round, then runs the semifinals, third-place matches and finals.'
+      : 'Showing ' + esc(typeName(cur.eventTypeId)) + ' only — the numbers are still this match’s place in the whole tournament, and moving one swaps it with its tournament-wide neighbour.') + '</div>';
   }
   return h + '<div class="pad"></div>';
 }
