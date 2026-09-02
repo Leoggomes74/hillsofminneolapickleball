@@ -247,10 +247,10 @@ function knockoutBlurb(e) {
 }
 
 // ---- tournament: shared bits ----------------------------------------------
-function matchRow(m, cls) {
+function matchRow(m, cls, evId) {
   var open = m.ready && !tour().locked;
   var tag = open ? 'button' : 'div';
-  var att = open ? ' data-act="score" data-val="' + m.id + '"' : '';
+  var att = open ? (evId ? ' data-act="schedscore" data-val="' + evId + '|' + m.id + '"' : ' data-act="score" data-val="' + m.id + '"') : '';
   return '<' + tag + ' class="' + cls + '"' + att + '><div class="n">#' + m.no + '</div>' +
     '<div class="t">' + esc(m.teamA) + '<br>' + esc(m.teamB) + '</div>' +
     '<div class="s' + (m.status === "live" ? " on" : "") + '">' + m.scoreLine + '</div></' + tag + '>';
@@ -406,22 +406,38 @@ function tabSched(t, cur, v) {
   return h + '<div class="pad"></div>';
 }
 
-function tabGroups(t, e, v) {  var h = '<div class="gwrap">';
-  v.tables.forEach(function (rows, pi) {
-    var pg = v.pool.filter(function (m) { return m.pool === pi; });
-    var played = pg.filter(function (m) { return m.status === "done"; }).length;
-    h += '<div class="gblock">';
-    h += '<div class="bar"><h2>' + (v.tables.length > 1 ? 'Group ' + L(pi) : 'Standings') + '</h2><div class="meta">' + played + ' of ' + pg.length + ' played</div></div>';
-    h += '<div class="sthead"><div>#</div><div>Team</div><div class="r">W</div><div class="r">L</div><div class="r">Diff</div></div>';
-    rows.forEach(function (r) {
-      h += '<div class="strow' + (advances(e, v, pi, r.pos) ? " adv" : "") + '"><div class="p">' + r.pos + '</div><div class="t">' + esc(r.team) + '</div>' +
-        '<div class="w">' + r.w + '</div><div class="l">' + r.l + '</div><div class="d">' + r.diff + '</div></div>';
+function tabGroups(t, e, v) {
+  var evs = evsOf(t), all = S.grpAll !== false;
+  var h = "";
+  if (evs.length > 1) {
+    h += '<div class="gfilter"><button class="gfb' + (all ? ' on' : '') + '" data-act="grpall" data-val="1">All events</button>' +
+      '<button class="gfb' + (all ? '' : ' on') + '" data-act="grpall" data-val="0">' + esc(typeName(e.eventTypeId)) + ' only</button></div>';
+  }
+  var show = (all ? evs : [e]);
+  show.forEach(function (x) {
+    var xv = x.id === e.id ? v : TModel.build(x);
+    if (evs.length > 1) {
+      h += '<div class="gevhead"><span class="chip ev">' + esc(typeName(x.eventTypeId)) + '</span>' +
+        '<span>' + xv.done.length + ' of ' + xv.scheduled + ' played</span></div>';
+    }
+    h += '<div class="gwrap">';
+    xv.tables.forEach(function (rows, pi) {
+      var pg = xv.pool.filter(function (m) { return m.pool === pi; });
+      var played = pg.filter(function (m) { return m.status === "done"; }).length;
+      h += '<div class="gblock">';
+      h += '<div class="bar"><h2>' + (xv.tables.length > 1 ? 'Group ' + L(pi) : 'Standings') + '</h2><div class="meta">' + played + ' of ' + pg.length + ' played</div></div>';
+      h += '<div class="sthead"><div>#</div><div>Team</div><div class="r">W</div><div class="r">L</div><div class="r">Diff</div></div>';
+      rows.forEach(function (r) {
+        h += '<div class="strow' + (advances(x, xv, pi, r.pos) ? " adv" : "") + '"><div class="p">' + r.pos + '</div><div class="t">' + esc(r.team) + '</div>' +
+          '<div class="w">' + r.w + '</div><div class="l">' + r.l + '</div><div class="d">' + r.diff + '</div></div>';
+      });
+      h += '<div class="lbl">' + (xv.tables.length > 1 ? 'Group ' + L(pi) + ' matches' : 'Matches') + '</div>';
+      pg.forEach(function (m) { h += matchRow(m, "mrow", x.id === e.id ? null : x.id); });
+      h += '</div>';
     });
-    h += '<div class="lbl">' + (v.tables.length > 1 ? 'Group ' + L(pi) + ' matches' : 'Matches') + '</div>';
-    pg.forEach(function (m) { h += matchRow(m, "mrow"); });
     h += '</div>';
   });
-  return h + '</div><div class="pad"></div>';
+  return h + '<div class="pad"></div>';
 }
 function advances(e, v, poolIndex, pos) {
   if (!e.knockout) return pos === 1;

@@ -23,6 +23,7 @@ var S = {
   regBusy: false,
   teamEdit: null,
   inv: null,
+  grpAll: true,
   typeDraft: {}, newType: { name: "", singles: false }
 };
 
@@ -402,6 +403,7 @@ document.addEventListener("click", function (e) {
 
   if (act === "invite") { if (val) S.tourId = val; S.screen = "invite"; S.menu = null; window.scrollTo(0, 0); return render(); }
   if (act === "backevent") { S.screen = "event"; window.scrollTo(0, 0); return render(); }
+  if (act === "grpall") { S.grpAll = val === "1"; window.scrollTo(0, 0); return render(); }
   if (act === "invdl") return downloadInvite();
   if (act === "invreset") return needPin(resetInv);
   if (act === "invunlock") return needPin(function () { render(); });
