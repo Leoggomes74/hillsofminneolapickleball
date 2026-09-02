@@ -48,9 +48,7 @@ function viewHome() {
       if (v.live.length) anyLive = true;
     });
     var status = t.locked ? "Locked" : (done === 0 ? "Not started" : (done >= sched ? "Complete" : "In progress"));
-    var regOn = !t.locked && evs.some(function (e) {
-      return e.regOpen !== false && (!e.maxTeams || (e.teams || []).length < e.maxTeams);
-    });
+    var regOn = !t.locked && evs.some(function (e) { return e.regOpen !== false; });
     h += '<div class="tcard">' +
       '<button class="tmain" data-act="open" data-val="' + t.id + '">' +
         '<div class="trow"><div class="tname">' + esc(t.name) + '</div>' +
@@ -65,11 +63,12 @@ function viewHome() {
         '<span class="tprog">' + done + ' / ' + sched + ' matches</span></div>' +
       '</button>' +
       (regOn ? '<div class="regrow">' + evs.filter(function (x) {
-        return x.regOpen !== false && (!x.maxTeams || (x.teams || []).length < x.maxTeams);
+        return x.regOpen !== false;
       }).map(function (x) {
-        return '<button class="regcta" data-act="openreg" data-val="' + t.id + '|' + x.id + '">' +
-          '<span>Register \u00b7 ' + esc(typeName(x.eventTypeId)) + '</span><i>' +
-          (x.maxTeams ? (x.maxTeams - (x.teams || []).length) + ' left' : (x.teams || []).length + ' in') + ' \u2192</i></button>';
+        var nn = (x.teams || []).length, ff = x.maxTeams && nn >= x.maxTeams;
+        return '<button class="regcta' + (ff ? ' wait' : '') + '" data-act="openreg" data-val="' + t.id + '|' + x.id + '">' +
+          '<span>' + (ff ? 'Waitlist' : 'Register') + ' \u00b7 ' + esc(typeName(x.eventTypeId)) + '</span><i>' +
+          (ff ? 'full \u00b7 ' + ((x.waitlist || []).length) + ' waiting' : (x.maxTeams ? (x.maxTeams - nn) + ' left' : nn + ' in')) + ' \u2192</i></button>';
       }).join('') + '</div>' : '') +
       '<button class="tmenu" data-act="menu" data-val="' + t.id + '">⋯</button>' +
       (S.menu === t.id ? menu(t) : '') +
@@ -392,6 +391,16 @@ function viewRoster() {
           '<div class="rc">Paid ____</div></div>';
       });
     }
+    var wq = x.waitlist || [];
+    if (wq.length) {
+      h += '<div class="rpool">Waitlist</div>';
+      wq.forEach(function (q, wi) {
+        h += '<div class="rrow"><div class="rn">W' + (wi + 1) + '</div>' +
+          '<div class="rt">' + esc(q.name) + '</div>' +
+          '<div class="rp">' + esc(players(q.players) || '—') + '</div>' +
+          '<div class="rc">Waiting</div></div>';
+      });
+    }
     h += '</div>';
   });
   h += '<div class="pfoot">Check each player in at the desk and initial the line. Corrections go through the organizer on the Teams page.</div>';
@@ -574,8 +583,15 @@ function tabTeams(t, e, v) {
       (single ? '' : '<div class="fsec"><label>Partner name</label><input type="text" data-reg="p2" value="' + esc(S.reg.p2) + '" placeholder="First and last name" maxlength="40"></div>') +
       '<button class="fbtn wide"' + (S.regBusy ? ' disabled' : '') + ' data-act="register">' + (S.regBusy ? 'Registering\u2026' : 'Register') + '</button>' +
       '<div class="fnote">You go straight into the draw and the emptiest pool.' + (t.fee ? ' The ' + esc(t.fee) + ' entry fee is payable to the Tournament Organization.' : '') + ' Organizers can correct any detail afterwards.</div></div>';
-  } else if (e.regOpen !== false && cap && n >= cap) {
-    h += '<div class="empty">This event is full — ' + cap + ' entries. Talk to the tournament director about a waiting list.</div>';
+  } else if (e.regOpen !== false && cap && n >= cap && !t.locked) {
+    var wq = e.waitlist || [];
+    h += '<div class="regbox wlbox"><div class="regh">Waitlist · ' + esc(typeName(e.eventTypeId)) + '</div>' +
+      '<div class="regsub">Event full · all ' + cap + ' spots taken · ' + wq.length + ' waiting</div>' +
+      '<div class="fsec"><label>' + (single ? 'Entry name' : 'Team name') + '</label><input type="text" data-wl="team" value="' + esc(S.wl.team) + '" placeholder="' + (single ? 'How should we list you?' : 'What is your team called?') + '" maxlength="40"></div>' +
+      '<div class="fsec"><label>Your name</label><input type="text" data-wl="p1" value="' + esc(S.wl.p1) + '" placeholder="First and last name" maxlength="40"></div>' +
+      (single ? '' : '<div class="fsec"><label>Partner name</label><input type="text" data-wl="p2" value="' + esc(S.wl.p2) + '" placeholder="First and last name" maxlength="40"></div>') +
+      '<button class="fbtn wide"' + (S.wlBusy ? ' disabled' : '') + ' data-act="joinwait">' + (S.wlBusy ? 'Joining\u2026' : 'Join the waitlist') + '</button>' +
+      '<div class="fnote">Nothing to pay yet. If a spot opens up the organizer moves the next name in, in order, and you go straight into a pool.</div></div>';
   }
 
   if (!n) {
@@ -592,9 +608,29 @@ function tabTeams(t, e, v) {
         (t.locked ? '' : '<button class="tedit" data-act="editteam" data-val="' + idxOf[r.team] + '">Edit</button>') + '</div>';
     });
   });
+  h += waitList(t, e, single, n, cap);
   h += '<button class="fbtn ghost wide" data-act="openroster">⎙ Printable ' + (single ? 'player' : 'team') + ' list</button>';
   h += '<div class="empty small">Organizers: tap <b>Edit</b> on any entry to correct names, move it to another pool or remove it — passcode required.</div>';
   h += '<div class="pad"></div>';
+  return h;
+}
+
+function waitList(t, e, single, n, cap) {
+  var wq = e.waitlist || [];
+  if (!wq.length) return "";
+  var room = !cap || n < cap;
+  var h = '<div class="lbl rule">Waitlist · ' + wq.length + ' waiting</div>';
+  wq.forEach(function (w, i) {
+    h += '<div class="team"><div><div class="n">' + esc(w.name) + '</div><div class="p">' + esc(players(w.players) || '—') + '</div></div>' +
+      '<div class="r">#' + (i + 1) + '</div>' +
+      (t.locked ? '<div></div>' : '<div class="wacts">' +
+        '<button class="tedit"' + (room ? '' : ' disabled') + ' data-act="promotewait" data-val="' + w.id + '">Move in</button>' +
+        '<button class="tedit del" data-act="delwait" data-val="' + w.id + '">Drop</button></div>') +
+      '</div>';
+  });
+  h += '<div class="empty small">' + (room
+    ? 'A spot is free — <b>Move in</b> puts the next ' + (single ? 'player' : 'team') + ' into the emptiest pool. Passcode required.'
+    : 'The event is full. As soon as an entry is removed, <b>Move in</b> becomes available for the name at the top.') + '</div>';
   return h;
 }
 

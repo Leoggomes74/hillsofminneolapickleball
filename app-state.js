@@ -21,6 +21,8 @@ var S = {
   noteBusy: false,
   reg: { team: "", p1: "", p2: "" },
   regBusy: false,
+  wl: { team: "", p1: "", p2: "" },
+  wlBusy: false,
   teamEdit: null,
   inv: null,
   grpAll: true,
@@ -421,6 +423,27 @@ document.addEventListener("click", function (e) {
   if (act === "invreset") return needPin(resetInv);
   if (act === "invunlock") return needPin(function () { render(); });
   if (act === "invshare") return shareInvite();
+  if (act === "joinwait") {
+    var tw = tour(), ew = ev(); if (!tw || !ew) return;
+    var sw = typeSingles(ew.eventTypeId);
+    var wt = String(S.wl.team || "").trim(), w1 = String(S.wl.p1 || "").trim(), w2 = String(S.wl.p2 || "").trim();
+    if (!wt || !w1 || (!sw && !w2)) { toast(sw ? "Entry name and player needed" : "Team, your name and partner needed"); return; }
+    S.wlBusy = true; render();
+    post({ action: "waitlist", tournamentId: tw.id, eventId: ew.id, team: wt, p1: w1, p2: w2 }).then(function (d) {
+      S.wlBusy = false;
+      if (d) { S.wl = { team: "", p1: "", p2: "" }; toast("You\u2019re on the waitlist", 2600); }
+      else render();
+    });
+    return;
+  }
+  if (act === "promotewait") {
+    var tp = tour(), ep = ev(); if (!tp || !ep) return;
+    return needPin(function () { post({ action: "promoteWait", tournamentId: tp.id, eventId: ep.id, id: val }, "Moved into the draw"); });
+  }
+  if (act === "delwait") {
+    var td = tour(), ed = ev(); if (!td || !ed) return;
+    return needPin(function () { post({ action: "removeWait", tournamentId: td.id, eventId: ed.id, id: val }, "Removed from waitlist"); });
+  }
   if (act === "openroster") { S.screen = "roster"; S.menu = null; window.scrollTo(0, 0); return render(); }
   if (act === "backteams") { S.screen = "event"; S.tab = "teams"; window.scrollTo(0, 0); return render(); }
   if (act === "rosall") { S.rosAll = val === "1"; window.scrollTo(0, 0); return render(); }
@@ -584,7 +607,7 @@ document.addEventListener("click", function (e) {
 });
 
 document.addEventListener("input", function (e) {
-  var el = e.target.closest("[data-field],[data-ef],[data-num],[data-team],[data-note],[data-tf],[data-nt],[data-reg],[data-tform],[data-inv],[data-cn]");
+  var el = e.target.closest("[data-field],[data-ef],[data-num],[data-team],[data-note],[data-tf],[data-nt],[data-reg],[data-tform],[data-inv],[data-cn],[data-wl]");
   if (!el) return;
   if (el.hasAttribute("data-cn")) { S.form.courtNames[+el.getAttribute("data-cn")] = el.value; return; }
   if (el.hasAttribute("data-num")) {
@@ -599,6 +622,7 @@ document.addEventListener("input", function (e) {
   }
   if (el.hasAttribute("data-note")) { S.note[el.getAttribute("data-note")] = el.value; return; }
   if (el.hasAttribute("data-reg")) { S.reg[el.getAttribute("data-reg")] = el.value; return; }
+  if (el.hasAttribute("data-wl")) { S.wl[el.getAttribute("data-wl")] = el.value; return; }
   if (el.hasAttribute("data-tform")) { S.teamEdit[el.getAttribute("data-tform")] = el.value; return; }
   if (el.hasAttribute("data-inv")) {
     if (S.inv && S.unlocked) { S.inv[el.getAttribute("data-inv")] = el.value; saveInv(); drawInvite(); }

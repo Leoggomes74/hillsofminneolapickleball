@@ -274,7 +274,7 @@ button.sbody:hover{background:#e7f1e5}
 .stat{margin-left:auto;font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:999px;border:1px solid;white-space:nowrap}
 .stat.fin{color:var(--green);border-color:var(--green);background:#eef5ec}
 .stat.liv{color:#b4451c;border-color:#b4451c;background:#fdeee6}
-.stat.opn{color:var(--n7);border-color:var(--n5);background:transparent}
+.stat.opn{color:var(--n7);border-color:var(--n6);background:transparent}
 .steams{font-size:14px;font-weight:600;line-height:1.3;margin-top:5px}
 .steams i{font-style:normal;font-size:11px;color:var(--n6);font-weight:700}
 .sscore{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--n7);margin-top:3px;font-variant-numeric:tabular-nums}
@@ -282,7 +282,7 @@ button.sbody:hover{background:#e7f1e5}
 .srow.hascrt{grid-template-columns:34px 1fr 58px 40px}
 .cd.crt{margin-top:3px;color:var(--green);font-weight:800}
 .scrt{display:flex;align-items:center;justify-content:center;padding:4px;border-left:1px solid var(--n3)}
-.cch{width:100%;min-height:44px;border:1px dashed var(--n5);background:#fff;color:var(--n7);font-family:var(--f);font-size:10px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;line-height:1.15;padding:4px 2px;word-break:break-word}
+.cch{width:100%;min-height:44px;border:1px dashed var(--n6);background:#fff;color:var(--n7);font-family:var(--f);font-size:10px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;line-height:1.15;padding:4px 2px;word-break:break-word}
 button.cch:hover{border-color:var(--green);color:var(--green)}
 .cch.man{border-style:solid;border-color:var(--green);color:var(--green);background:#eef5ec}
 .cpicks{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:6px}
@@ -348,8 +348,16 @@ html,body{background:#fff}
 .regcta{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;border:0;background:var(--green);color:#fff;font-weight:800;font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;padding:12px 16px;min-height:46px}
 .regcta i{font-style:normal;font-size:10px;color:#cfe0d2;flex:none;letter-spacing:.06em}
 .regcta:hover{background:#245536}
+.regcta.wait{background:var(--ink)}
+.regcta.wait:hover{background:#3a3a3a}
 .tedit{border:2px solid var(--n3);background:transparent;color:var(--n7);font-weight:800;font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:7px 10px;min-height:36px;flex:none}
 .tedit:hover{background:#e7f1e5;border-color:var(--green);color:var(--green)}
+.tedit[disabled]{opacity:.35}
+.tedit[disabled]:hover{background:transparent;border-color:var(--n3);color:var(--n7)}
+.tedit.del{color:var(--red)}
+.tedit.del:hover{border-color:var(--red);color:var(--red);background:#fdeee6}
+.wacts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.regbox.wlbox{background:#fdf4e6;border-bottom-color:var(--ink)}
 .invwrap{padding:14px 16px;background:var(--n3)}
 .invwrap canvas{display:block;width:100%;height:auto;border:2px solid var(--ink)}
 .gfilter{display:flex;gap:2px;padding:10px 16px;background:var(--n3);border-bottom:2px solid var(--div)}
