@@ -207,6 +207,9 @@ function sanitizeTournament(body, existing) {
     time: clean(body.time, 5),
     events: events.length ? events : prev,
     order: Array.isArray(body.order) ? body.order.slice(0, 600).map(k => clean(k, 60)) : (existing ? existing.order || [] : []),
+    courtCount: Math.max(0, Math.min(12, parseInt(body.courtCount, 10) || 0)),
+    courtNames: (Array.isArray(body.courtNames) ? body.courtNames : []).slice(0, 12).map(n => clean(n, 24)),
+    courtMap: existing ? existing.courtMap || {} : {},
     notes: existing ? existing.notes || [] : [],
     locked: existing ? !!existing.locked : false,
     archived: existing ? !!existing.archived : false,
@@ -375,6 +378,7 @@ export default async function (req, res) {
       copy.id = `${slug(cur.name)}-${Date.now().toString(36).slice(-4)}`;
       copy.name = clean(body.name, 60) || `${cur.name} (copy)`;
       copy.order = [];
+      copy.courtMap = {};
       (copy.events || []).forEach(e => { e.id = rid("ev"); e.results = {}; });
       copy.notes = [];
       copy.locked = false;
@@ -396,6 +400,16 @@ export default async function (req, res) {
       const cur = find(body.tournamentId);
       if (!cur) return res.status(404).json({ error: "no such tournament" });
       cur.order = (Array.isArray(body.order) ? body.order : []).slice(0, 600).map(k => clean(k, 60));
+    } else if (a === "setCourts") {
+      const cur = find(body.tournamentId);
+      if (!cur) return res.status(404).json({ error: "no such tournament" });
+      const src = body.courtMap && typeof body.courtMap === "object" ? body.courtMap : {};
+      const out = {};
+      Object.keys(src).slice(0, 600).forEach(k => {
+        const i = parseInt(src[k], 10);
+        if (Number.isInteger(i) && i >= 0 && i < 12) out[clean(k, 60)] = i;
+      });
+      cur.courtMap = out;
     } else if (a === "setDefault") {
       db.defaultId = body.tournamentId || null;
     } else {
