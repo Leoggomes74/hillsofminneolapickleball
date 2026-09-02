@@ -190,6 +190,7 @@ function sanitizeEvent(body, existing) {
     koFormat: clean(body.koFormat, 12) || "to11win2",
     finalFormat: clean(body.finalFormat, 12) || "to11win2",
     teams,
+    waitlist: existing && Array.isArray(existing.waitlist) ? existing.waitlist : [],
     results: existing ? existing.results || {} : {}
   };
 }
@@ -294,6 +295,51 @@ export default async function (req, res) {
       return res.status(200).json({ t, db });
     }
 
+    // ---- waitlist ------------------------------------------------------------
+    if (a === "waitlist" || a === "promoteWait" || a === "removeWait") {
+      const tour = find(body.tournamentId);
+      if (!tour) return res.status(404).json({ error: "no such tournament" });
+      const ev = (tour.events || []).find(e => e.id === body.eventId);
+      if (!ev) return res.status(404).json({ error: "no such event" });
+      ev.teams = Array.isArray(ev.teams) ? ev.teams : [];
+      ev.waitlist = Array.isArray(ev.waitlist) ? ev.waitlist : [];
+      const type = (db.eventTypes || []).find(x => x.id === ev.eventTypeId);
+      const single = type ? !!type.singles : false;
+      const cap = ev.maxTeams ? Math.min(ev.maxTeams, 32) : 32;
+      const lower = s => String(s).toLowerCase();
+
+      if (a === "removeWait") {
+        ev.waitlist = ev.waitlist.filter(w => w.id !== clean(body.id, 24));
+      } else if (a === "promoteWait") {
+        if (ev.teams.length >= cap) return res.status(409).json({ error: "no free spot yet" });
+        const w = ev.waitlist.find(x => x.id === clean(body.id, 24));
+        if (!w) return res.status(404).json({ error: "not on the waitlist" });
+        const pc = Math.max(1, ev.poolCount || 1), counts = new Array(pc).fill(0);
+        ev.teams.forEach(t => { counts[Math.min(pc - 1, Math.max(0, t.pool || 0))]++; });
+        let pool = 0;
+        for (let i = 1; i < pc; i++) if (counts[i] < counts[pool]) pool = i;
+        ev.teams.push({ name: w.name, players: w.players || [], pool, registered: Date.now() });
+        ev.waitlist = ev.waitlist.filter(x => x.id !== w.id);
+      } else {
+        if (tour.locked) return res.status(423).json({ error: "this tournament is locked" });
+        if (ev.regOpen === false) return res.status(409).json({ error: "registration is closed for this event" });
+        if (ev.teams.length < cap) return res.status(409).json({ error: "there are still spots open — register normally" });
+        const name = clean(body.team, 40), p1 = clean(body.p1, 40), p2 = clean(body.p2, 40);
+        if (!name || !p1 || (!single && !p2)) return res.status(400).json({ error: "name, player and partner are required" });
+        if (ev.waitlist.length >= 32) return res.status(409).json({ error: "the waitlist is full too" });
+        if (ev.teams.some(t => lower(t.name) === lower(name)) || ev.waitlist.some(w => lower(w.name) === lower(name)))
+          return res.status(409).json({ error: "that name is already taken" });
+        const dup = r => (r.players || []).some(p => lower(p) === lower(p1) || (p2 && lower(p) === lower(p2)));
+        if (ev.teams.some(dup) || ev.waitlist.some(dup)) return res.status(409).json({ error: "one of those players is already entered" });
+        ev.waitlist.push({
+          id: "w" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+          name, players: single ? [p1] : [p1, p2], at: Date.now()
+        });
+      }
+      const t = await writeDb(db);
+      return res.status(200).json({ t, db });
+    }
+
     if (a === "note" || a === "removeNote") {
       const tour = find(body.tournamentId);
       if (!tour) return res.status(404).json({ error: "no such tournament" });
@@ -379,7 +425,7 @@ export default async function (req, res) {
       copy.name = clean(body.name, 60) || `${cur.name} (copy)`;
       copy.order = [];
       copy.courtMap = {};
-      (copy.events || []).forEach(e => { e.id = rid("ev"); e.results = {}; });
+      (copy.events || []).forEach(e => { e.id = rid("ev"); e.results = {}; e.waitlist = []; });
       copy.notes = [];
       copy.locked = false;
       copy.archived = false;
