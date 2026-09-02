@@ -156,6 +156,14 @@ function viewForm() {
       '<div class="fnote">Shown on the Info tab and to anyone registering. Leave blank if the event is free.</div></div>';
     h += '<div class="fsec two"><div><label>Start date</label><input type="date" data-field="date" value="' + esc(f.date) + '"></div>' +
       '<div><label>Start time</label><input type="time" data-field="time" value="' + esc(f.time) + '"></div></div>';
+    h += '<div class="fsec"><label>Number of courts</label><input type="number" min="0" max="12" data-field="courtCount" value="' + esc(String(f.courtCount || 0)) + '">' +
+      '<div class="fnote">Games are dealt out across these courts in running order, so each court gets the same number (±1). Leave at 0 if you do not track courts.</div></div>';
+    if ((f.courtNames || []).length) {
+      h += '<div class="fsec"><label>Court names</label><div class="cnames">' +
+        f.courtNames.map(function (n, i) {
+          return '<input type="text" data-cn="' + i + '" value="' + esc(n) + '" maxlength="24" placeholder="Court ' + (i + 1) + '">';
+        }).join('') + '</div></div>';
+    }
     if (f.error) h += '<div class="ferr">' + esc(f.error) + '</div>';
     h += '<div class="facts"><button class="fbtn ghost" data-act="formcancel">Cancel</button><button class="fbtn" data-act="step" data-val="2">Next: event types →</button></div>';
   } else if (f.step === 2) {
@@ -370,7 +378,7 @@ function viewPrint() {
         '<div class="pteam"><span>' + esc(m.ready ? m.teamA : (m.seedA || m.teamA)) + '</span><div class="pbx">' + boxes + '</div></div>' +
         '<div class="pteam"><span>' + esc(m.ready ? m.teamB : (m.seedB || m.teamB)) + '</span><div class="pbx">' + boxes + '</div></div>' +
       '</div>' +
-      '<div class="pmeta"><b>' + esc(TModel.fmtLabel(m.fmtKey)) + '</b><span>Court ____</span><span>Time ____</span><span>Initials ____</span></div>' +
+      '<div class="pmeta"><b>' + esc(TModel.fmtLabel(m.fmtKey)) + '</b>' + (r.courtName ? '<span>Court · <b>' + esc(r.courtName) + '</b></span>' : '<span>Court ____</span>') + '<span>Time ____</span><span>Initials ____</span></div>' +
     '</div>';
   });
   h += '<div class="pfoot">Winner circles their own score. Both teams initial the line before leaving the court.</div>';
@@ -395,7 +403,12 @@ function tabSched(t, cur, v) {
   h += '<div class="lbl rule">Running order</div>';
   list.forEach(function (r) {
     var m = r.m, i = r.court - 1, tappable = m.ready && !t.locked;
-    var cls = "srow" + (m.status === "done" ? " done" : "") + (m.status === "live" ? " onair" : "");
+    var crt = r.courtName
+      ? (t.locked
+        ? '<span class="cch' + (r.courtManual ? ' man' : '') + '">' + esc(r.courtName) + '</span>'
+        : '<button class="cch' + (r.courtManual ? ' man' : '') + '" data-act="courtpick" data-val="' + r.key + '">' + esc(r.courtName) + '</button>')
+      : '';
+    var cls = "srow" + (m.status === "done" ? " done" : "") + (m.status === "live" ? " onair" : "") + (r.courtName ? " hascrt" : "");
     h += '<div class="' + cls + '"><div class="sno">' + r.court + '</div>' +
       '<' + (tappable ? 'button' : 'div') + ' class="sbody"' + (tappable ? ' data-act="schedscore" data-val="' + r.key + '"' : '') + '>' +
         '<div class="stop"><span class="chip ev">' + esc(typeName(r.ev.eventTypeId)) + '</span>' +
@@ -405,6 +418,7 @@ function tabSched(t, cur, v) {
         '<div class="steams">' + esc(m.teamA) + ' <i>v</i> ' + esc(m.teamB) + '</div>' +
         '<div class="sscore' + (m.status === "live" ? ' on' : '') + '">' + (m.status === "upcoming" ? esc(shortWhen(r.ev)) : m.scoreLine + (m.status === "live" ? ' · live' : '')) + '</div>' +
       '</' + (tappable ? 'button' : 'div') + '>' +
+      (crt ? '<div class="scrt">' + crt + '</div>' : '') +
       '<div class="smove">' +
         '<button class="mvb" data-act="mvup" data-val="' + i + '"' + (i === 0 ? ' disabled' : '') + ' aria-label="Move up">▲</button>' +
         '<button class="mvb" data-act="mvdn" data-val="' + i + '"' + (i === full.length - 1 ? ' disabled' : '') + ' aria-label="Move down">▼</button>' +
@@ -711,6 +725,35 @@ function teamSheet() {
     '</div></div>';
 }
 
+function courtSheet() {
+  if (!S.courtPick) return "";
+  var t = tour(); if (!t) return "";
+  var names = TModel.courtsOf(t);
+  var row = TModel.master(t).filter(function (r) { return r.key === S.courtPick; })[0];
+  if (!row) return "";
+  if (!names.length) {
+    return '<div class="back2" data-act="courtclose" data-back="1"><div class="sheet">' +
+      '<div class="h"><b>No courts yet</b><button data-act="courtclose">CLOSE</button></div>' +
+      '<div class="msg">Set the number of courts and their names in the tournament master data first.</div>' +
+      '<div class="acts"><button class="lv" data-act="courtclose">Close</button></div></div></div>';
+  }
+  var btns = names.map(function (n, i) {
+    return '<button class="cpick' + (row.courtIdx === i ? ' on' : '') + '" data-act="setcourt" data-val="' + row.key + '@@' + i + '">' + esc(n) + '</button>';
+  }).join('');
+  return '<div class="back2" data-act="courtclose" data-back="1"><div class="sheet">' +
+    '<div class="h"><b>Court · #' + row.court + '</b><button data-act="courtclose">CLOSE</button></div>' +
+    '<div class="msg">' + esc(typeName(row.ev.eventTypeId)) + ' · ' + esc(row.m.stageLabel) + '<br>' +
+      esc(row.m.teamA) + ' v ' + esc(row.m.teamB) + '</div>' +
+    '<div class="fsec"><label>Play on</label><div class="cpicks">' + btns + '</div>' +
+      '<div class="fnote">' + (row.courtManual
+        ? 'Set by hand. Reset it to let the app keep the load even across courts.'
+        : 'Suggested automatically to keep games per court balanced.') + '</div></div>' +
+    (row.courtManual
+      ? '<button class="rm" data-act="setcourt" data-val="' + row.key + '@@auto">Back to the suggested court</button>'
+      : '') +
+    '<div class="acts"><button class="lv" data-act="courtclose">Close</button></div></div></div>';
+}
+
 function gate() {
   if (!S.gate) return "";
   return '<div class="back2" data-act="gateclose" data-back="1"><div class="sheet gate">' +
@@ -745,7 +788,7 @@ function render() {
   else if (S.screen === "types") h = viewTypes();
   else if (S.screen === "new" || S.screen === "edit") h = S.form ? viewForm() : viewHome();
   else h = viewEvent();
-  h += sheet() + teamSheet() + gate() + confirmBox();
+  h += sheet() + teamSheet() + courtSheet() + gate() + confirmBox();
   if (S.toast) h += '<div class="toast"><span>' + esc(S.toast) + '</span></div>';
   document.getElementById("app").innerHTML = h;
   if (S.screen === "invite") {

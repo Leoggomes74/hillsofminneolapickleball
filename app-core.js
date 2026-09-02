@@ -282,6 +282,14 @@ function orderKeys(tour) {
   return out;
 }
 
+// Court list from master data; blank names fall back to "Court n".
+function courtsOf(tour) {
+  var n = Math.max(0, Math.min(12, parseInt((tour && tour.courtCount) || 0, 10) || 0));
+  var nm = (tour && tour.courtNames) || [], out = [];
+  for (var i = 0; i < n; i++) out.push(String(nm[i] || "").trim() || ("Court " + (i + 1)));
+  return out;
+}
+
 // [{ key, ev, m }] in court order, numbered 1..n across the whole tournament.
 function master(tour) {
   var evs = (tour && tour.events) || [], views = {};
@@ -300,7 +308,17 @@ function master(tour) {
   rows = rows.map(function (r, i) { return { r: r, i: i, k: RANK[r.m.stage] == null ? 0 : RANK[r.m.stage] }; })
     .sort(function (a, b) { return a.k - b.k || a.i - b.i; })
     .map(function (x) { return x.r; });
-  rows.forEach(function (r, i) { r.court = i + 1; });
+  // Courts are dealt out round robin down the running order, so every court
+  // gets the same number of games (±1). An admin override wins for that match.
+  var cn = courtsOf(tour), cmap = (tour && tour.courtMap) || {};
+  rows.forEach(function (r, i) {
+    r.court = i + 1;
+    var ov = cmap[r.key], manual = ov != null && cn[+ov] != null;
+    var idx = manual ? +ov : (cn.length ? i % cn.length : -1);
+    r.courtIdx = idx;
+    r.courtName = idx >= 0 ? cn[idx] : "";
+    r.courtManual = manual;
+  });
   return rows;
 }
 
@@ -309,5 +327,5 @@ window.TModel = {
   DEFAULT_TYPES: DEFAULT_TYPES,
   isSingles: isSingles, fmt: fmt, fmtLabel: fmtLabel, assignPools: assignPools, poolsOf: poolsOf,
   build: build, gameIds: gameIds, standings: standings,
-  autoOrder: autoOrder, orderKeys: orderKeys, master: master
+  autoOrder: autoOrder, orderKeys: orderKeys, master: master, courtsOf: courtsOf
 };

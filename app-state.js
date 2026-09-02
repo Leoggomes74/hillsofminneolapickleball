@@ -217,6 +217,7 @@ function blankEvent(typeId) {
 function blankForm() {
   var f = {
     mode: "new", id: null, name: "", director: "", fee: "",
+    courtCount: 2, courtNames: ["Court 1", "Court 2"],
     date: new Date().toISOString().slice(0, 10), time: "08:00",
     events: [blankEvent()], step: 1, error: ""
   };
@@ -246,6 +247,13 @@ function rebalance(e) {
   var pools = TModel.assignPools(e.teams.length, Math.max(1, Math.min(8, parseInt(e.poolCount, 10) || 1)));
   e.teams.forEach(function (t, i) { t.pool = pools[i]; });
 }
+function syncCourts(f) {
+  var n = Math.max(0, Math.min(12, parseInt(f.courtCount, 10) || 0));
+  f.courtCount = n;
+  var out = [];
+  for (var i = 0; i < n; i++) out.push((f.courtNames || [])[i] || ("Court " + (i + 1)));
+  f.courtNames = out;
+}
 function openNew() {
   needPin(function () { S.form = blankForm(); S.screen = "new"; window.scrollTo(0, 0); render(); });
 }
@@ -255,6 +263,7 @@ function openEdit(id) {
     if (!t) return;
     S.form = {
       mode: "edit", id: t.id, name: t.name, director: t.director || "", fee: t.fee || "",
+      courtCount: t.courtCount || 0, courtNames: (TModel.courtsOf(t) || []).slice(),
       date: t.date || "", time: t.time || "",
       events: evsOf(t).map(function (e) {
         return {
@@ -309,6 +318,8 @@ function submitForm() {
   if (err) { f.error = err; render(); return; }
   var payload = {
     name: f.name, director: String(f.director || "").trim(), fee: String(f.fee || "").trim(), date: f.date, time: f.time,
+    courtCount: parseInt(f.courtCount, 10) || 0,
+    courtNames: (f.courtNames || []).map(function (n) { return String(n || "").trim(); }),
     events: f.events.map(function (e) {
       var single = typeSingles(e.eventTypeId);
       return {
@@ -424,6 +435,19 @@ document.addEventListener("click", function (e) {
       var sw = keys[i]; keys[i] = keys[j]; keys[j] = sw;
       tm.order = keys; cacheDb(); render();
       post({ action: "setOrder", tournamentId: tm.id, order: keys });
+    });
+  }
+  if (act === "courtpick") { S.courtPick = val; return render(); }
+  if (act === "courtclose") { S.courtPick = null; return render(); }
+  if (act === "setcourt") {
+    var cSep = val.indexOf("@@"), cKey = val.slice(0, cSep), cIdx = val.slice(cSep + 2);
+    var tcm = tour(); if (!tcm) return;
+    return needPin(function () {
+      var mp = {}, src = tcm.courtMap || {};
+      Object.keys(src).forEach(function (k) { mp[k] = src[k]; });
+      if (cIdx === "auto") delete mp[cKey]; else mp[cKey] = +cIdx;
+      tcm.courtMap = mp; S.courtPick = null; cacheDb(); render();
+      post({ action: "setCourts", tournamentId: tcm.id, courtMap: mp }, "Court updated");
     });
   }
   if (act === "autosort") {
@@ -557,8 +581,9 @@ document.addEventListener("click", function (e) {
 });
 
 document.addEventListener("input", function (e) {
-  var el = e.target.closest("[data-field],[data-ef],[data-num],[data-team],[data-note],[data-tf],[data-nt],[data-reg],[data-tform],[data-inv]");
+  var el = e.target.closest("[data-field],[data-ef],[data-num],[data-team],[data-note],[data-tf],[data-nt],[data-reg],[data-tform],[data-inv],[data-cn]");
   if (!el) return;
+  if (el.hasAttribute("data-cn")) { S.form.courtNames[+el.getAttribute("data-cn")] = el.value; return; }
   if (el.hasAttribute("data-num")) {
     var raw = el.value.replace(/[^0-9]/g, "").slice(0, 2);
     if (raw !== el.value) el.value = raw;
@@ -602,6 +627,8 @@ document.addEventListener("input", function (e) {
 });
 
 document.addEventListener("change", function (e) {
+  var cc = e.target.closest('[data-field="courtCount"]');
+  if (cc && S.form) { S.form.courtCount = cc.value; syncCourts(S.form); return render(); }
   var el = e.target.closest("[data-ef]");
   if (!el) return;
   var b = el.getAttribute("data-ef").split(":"), evf = S.form.events[+b[0]], key = b[1];
