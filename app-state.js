@@ -414,8 +414,9 @@ document.addEventListener("click", function (e) {
   if (act === "mvup" || act === "mvdn") {
     var tm = tour(); if (!tm) return;
     return needPin(function () {
-      var keys = TModel.orderKeys(tm), i = +val, j = act === "mvup" ? i - 1 : i + 1;
+      var keys = TModel.master(tm).map(function (r) { return r.key; }), i = +val, j = act === "mvup" ? i - 1 : i + 1;
       if (j < 0 || j >= keys.length) return;
+      if ((TModel.master(tm)[i].m.stage) !== (TModel.master(tm)[j].m.stage)) { toast("Pool, semifinals, third place and final stay in that order"); return; }
       var sw = keys[i]; keys[i] = keys[j]; keys[j] = sw;
       tm.order = keys; cacheDb(); render();
       post({ action: "setOrder", tournamentId: tm.id, order: keys });

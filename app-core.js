@@ -286,15 +286,22 @@ function orderKeys(tour) {
 function master(tour) {
   var evs = (tour && tour.events) || [], views = {};
   evs.forEach(function (e) { views[e.id] = build(e); });
-  var out = [];
+  var rows = [];
   orderKeys(tour).forEach(function (key) {
     var cut = key.indexOf("|"), eid = key.slice(0, cut), mid = key.slice(cut + 1);
     var v = views[eid]; if (!v) return;
     var m = v.byId[mid]; if (!m) return;
     var e = evs.filter(function (x) { return x.id === eid; })[0];
-    out.push({ key: key, ev: e, m: m, court: out.length + 1 });
+    rows.push({ key: key, ev: e, m: m });
   });
-  return out;
+  // Stage priority is absolute: all pool play, then semifinals, then third
+  // place, then the finals. Manual moves reorder within a stage only.
+  var RANK = { pool: 0, sf: 1, bronze: 2, final: 3 };
+  rows = rows.map(function (r, i) { return { r: r, i: i, k: RANK[r.m.stage] == null ? 0 : RANK[r.m.stage] }; })
+    .sort(function (a, b) { return a.k - b.k || a.i - b.i; })
+    .map(function (x) { return x.r; });
+  rows.forEach(function (r, i) { r.court = i + 1; });
+  return rows;
 }
 
 window.TModel = {
