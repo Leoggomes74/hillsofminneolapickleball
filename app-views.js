@@ -36,6 +36,7 @@ function viewHome() {
   var h = masthead("Pickleball<br>Tournaments", "Hills of Minneola · Pick an event", false);
   h += '<button class="cta" data-act="new">+ Create tournament</button>';
   h += '<button class="cta ghost" data-act="opentypes">⚙ Manage event types</button>';
+  h += '<button class="cta ghost" data-act="openhelp">❓ How to use this app</button>';
   if (!live.length) {
     h += '<div class="empty">No tournaments yet. Create one, add its event types, and every schedule, pool and bracket builds itself.</div>';
   }
@@ -280,7 +281,8 @@ function viewEvent() {
   var single = typeSingles(e.eventTypeId);
   var sub = esc(typeName(e.eventTypeId)) + ' · ' + (e.teams || []).length + (single ? ' players' : ' teams') + (t.locked ? ' · Locked' : '');
   h += '<div class="hd"><button class="back" data-act="home">‹</button><div class="hdmain"><h1>' + esc(t.name) + '</h1><div class="sub">' + sub + '</div></div>' +
-    '<div class="tools">' + (v.live.length ? '<div class="livechip"><i></i><span>LIVE</span></div>' : '') + syncChip() + '</div></div>';
+    '<div class="tools">' + (v.live.length ? '<div class="livechip"><i></i><span>LIVE</span></div>' : '') +
+    '<button class="ihelp" data-act="openhelp" aria-label="Help">?</button>' + syncChip() + '</div></div>';
 
   if (evs.length > 1) {
     h += '<div class="evbar">' + evs.map(function (x) {
@@ -350,6 +352,32 @@ function shortStage(m) {
   if (m.stage === "sf") return "Semifinal";
   if (m.stage === "bronze") return "Third place";
   return "Final";
+}
+
+// ---- printable team / player list ------------------------------------------
+function viewHelp() {
+  var h = '<div class="hd noprint"><button class="back" data-act="backhelp">‹</button>' +
+    '<div class="hdmain"><h1>Player guide</h1><div class="sub">Using the tournament app</div></div></div>';
+  var sec = function (title, body) { return '<div class="lbl rule">' + esc(title) + '</div><div class="hlpbox">' + body + '</div>'; };
+  h += '<div class="hlpbox intro">Everything here works from your phone, with no login and no app to install — just this page. This guide covers what you can do as a player. Anything needing an organizer passcode is handled by the tournament director.</div>';
+  h += sec("Finding your tournament", '<p>The home screen lists every open tournament. Tap one to see its events — dates, times and entry fee are on the info line at the top.</p>' +
+    '<p>If a tournament has more than one event (e.g. Men\u2019s Doubles and Mixed), a row of chips lets you switch between them at the top of the event screen.</p>');
+  h += sec("Registering", '<p>On the <b>Teams</b> tab, if an event still has room, you\u2019ll see a registration box: enter your team/entry name, your name and your partner\u2019s name (doubles) and tap <b>Register</b>. No passcode needed \u2014 you go straight into the draw and the emptiest pool.</p>' +
+    '<p>Made a typo? Ask the tournament director \u2014 name and pool corrections need the organizer passcode.</p>');
+  h += sec("Joining the waitlist", '<p>Once an event fills up, the registration box turns into a <b>Waitlist</b> box. Join the same way \u2014 no passcode, nothing to pay yet. You\u2019ll be listed by position (#1, #2\u2026).</p>' +
+    '<p>If a spot opens, the organizer moves the next name on the list into the draw, in order.</p>');
+  h += sec("The Now tab", '<p>Your first stop during play. It shows:</p><ul class="hlplist">' +
+    '<li><b>On court now</b> \u2014 live matches with running scores.</li>' +
+    '<li><b>Up next</b> \u2014 the matches coming up, with the court assignment so you know where to head.</li>' +
+    '<li><b>Latest results</b> \u2014 the most recent finished matches.</li></ul>' +
+    '<p>Each team line shows the players\u2019 names, so it\u2019s easy to call the right people when it\u2019s their turn.</p>');
+  h += sec("The Groups tab", '<p>Standings for each pool \u2014 wins, losses and point differential \u2014 plus every pool match and its score. Highlighted rows are the teams currently advancing to the knockout stage.</p>');
+  h += sec("The Bracket tab", '<p>The knockout stage once pools are done: semifinals, third place and the final. Seeds and scores fill in as results come in; the champion is announced at the top once the final is played.</p>');
+  h += sec("The Order tab", '<p>The full running order across every court for the whole tournament, in the sequence matches will be played. Each row shows the event, stage, status (<b>Open</b> / <b>Live</b> / <b>Finished</b>) and its assigned court.</p>' +
+    '<p>Use the search box to jump straight to your team or player name, then tap <b>Apply</b> (or press Enter). <b>Reset</b> clears it and shows everyone again.</p>');
+  h += sec("Getting there on time", '<p>Matches don\u2019t start at fixed times \u2014 they run in the order shown on the Order tab, as courts free up. Keep an eye on <b>Up next</b> on the Now tab so you\u2019re ready when your court opens up.</p>');
+  h += '<div class="pad"></div>';
+  return h;
 }
 
 // ---- printable team / player list ------------------------------------------
@@ -904,6 +932,7 @@ function render() {
   if (S.screen === "home") h = viewHome();
   else if (S.screen === "print") h = viewPrint();
   else if (S.screen === "roster") h = viewRoster();
+  else if (S.screen === "help") h = viewHelp();
   else if (S.screen === "invite") h = viewInvite();
   else if (S.screen === "types") h = viewTypes();
   else if (S.screen === "new" || S.screen === "edit") h = S.form ? viewForm() : viewHome();

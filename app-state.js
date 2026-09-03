@@ -451,6 +451,8 @@ document.addEventListener("click", function (e) {
     return needPin(function () { post({ action: "removeWait", tournamentId: td.id, eventId: ed.id, id: val }, "Removed from waitlist"); });
   }
   if (act === "openroster") { S.screen = "roster"; S.menu = null; window.scrollTo(0, 0); return render(); }
+  if (act === "openhelp") { S.helpBack = { screen: S.screen, tab: S.tab }; S.screen = "help"; S.menu = null; window.scrollTo(0, 0); return render(); }
+  if (act === "backhelp") { var hb = S.helpBack || { screen: "home" }; S.screen = hb.screen; if (hb.tab) S.tab = hb.tab; S.helpBack = null; window.scrollTo(0, 0); return render(); }
   if (act === "backteams") { S.screen = "event"; S.tab = "teams"; window.scrollTo(0, 0); return render(); }
   if (act === "rosall") { S.rosAll = val === "1"; window.scrollTo(0, 0); return render(); }
   if (act === "openprint") { S.screen = "print"; S.menu = null; window.scrollTo(0, 0); return render(); }
