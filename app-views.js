@@ -438,13 +438,15 @@ function viewPrint() {
 
   list.forEach(function (r, i) {
     var m = r.m, games = TModel.fmt(m.fmtKey).games;
+    var find = function (name) { return (r.ev.teams || []).filter(function (x) { return x.name === name; })[0]; };
+    var pl = function (name) { var x = find(name); return x ? players(x.players) : ""; };
     var boxes = '';
     for (var g = 0; g < games; g++) boxes += '<i></i>';
     h += '<div class="prow"><div class="pno">' + (i + 1) + '</div>' +
       '<div class="pmid">' +
         '<div class="pev">' + esc(typeName(r.ev.eventTypeId)) + ' · ' + esc(m.stageLabel) + '</div>' +
-        '<div class="pteam"><span>' + esc(m.ready ? m.teamA : (m.seedA || m.teamA)) + '</span><div class="pbx">' + boxes + '</div></div>' +
-        '<div class="pteam"><span>' + esc(m.ready ? m.teamB : (m.seedB || m.teamB)) + '</span><div class="pbx">' + boxes + '</div></div>' +
+        '<div class="pteam"><span>' + esc(m.ready ? m.teamA : (m.seedA || m.teamA)) + (pl(m.teamA) ? ' <small>· ' + esc(pl(m.teamA)) + '</small>' : '') + '</span><div class="pbx">' + boxes + '</div></div>' +
+        '<div class="pteam"><span>' + esc(m.ready ? m.teamB : (m.seedB || m.teamB)) + (pl(m.teamB) ? ' <small>· ' + esc(pl(m.teamB)) + '</small>' : '') + '</span><div class="pbx">' + boxes + '</div></div>' +
       '</div>' +
       '<div class="pmeta"><b>' + esc(TModel.fmtLabel(m.fmtKey)) + '</b>' + (r.courtName ? '<span>Court · <b>' + esc(r.courtName) + '</b></span>' : '<span>Court ____</span>') + '<span>Time ____</span><span>Initials ____</span></div>' +
     '</div>';
