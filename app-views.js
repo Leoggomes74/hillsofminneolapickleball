@@ -464,10 +464,16 @@ function tabSched(t, cur, v) {
     (q ? '<button class="qreset" data-act="schedqreset">Reset</button>' : '') + '</div>';
   h += '<button class="fbtn ghost wide" data-act="autosort">Rebuild automatic order</button>';
   h += '<button class="fbtn ghost wide" data-act="openprint">⎙ Printable score sheets</button>';
+  var findTeam = function (evTeams, name) { return (evTeams || []).filter(function (x) { return x.name === name; })[0]; };
+  list.forEach(function (r) {
+    var ta = findTeam(r.ev.teams, r.m.teamA), tb = findTeam(r.ev.teams, r.m.teamB);
+    r.playersA = ta ? players(ta.players) : "";
+    r.playersB = tb ? players(tb.players) : "";
+  });
   if (q) {
     var ql = q.toLowerCase();
     list = list.filter(function (r) {
-      return (r.m.teamA + " " + r.m.teamB).toLowerCase().indexOf(ql) !== -1;
+      return (r.m.teamA + " " + r.m.teamB + " " + r.playersA + " " + r.playersB).toLowerCase().indexOf(ql) !== -1;
     });
   }
   if (!list.length) return h + '<div class="empty">' + (q ? 'No matches found for “' + esc(q) + '”.' : 'No matches scheduled yet.') + '</div><div class="pad"></div>';
@@ -487,6 +493,7 @@ function tabSched(t, cur, v) {
         '<span class="stat ' + (m.status === "done" ? 'fin' : m.status === "live" ? 'liv' : 'opn') + '">' +
           (m.status === "done" ? 'Finished' : m.status === "live" ? 'Live' : 'Open') + '</span></div>' +
         '<div class="steams">' + esc(m.teamA) + ' <i>v</i> ' + esc(m.teamB) + '</div>' +
+        (r.playersA || r.playersB ? '<div class="splayers">' + esc(r.playersA || '—') + ' <i>v</i> ' + esc(r.playersB || '—') + '</div>' : '') +
         '<div class="sscore' + (m.status === "live" ? ' on' : '') + '">' + (m.status === "upcoming" ? esc(shortWhen(r.ev)) : m.scoreLine + (m.status === "live" ? ' · live' : '')) + '</div>' +
       '</' + (tappable ? 'button' : 'div') + '>' +
       (crt ? '<div class="scrt">' + crt + '</div>' : '') +

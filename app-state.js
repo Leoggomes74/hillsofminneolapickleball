@@ -651,7 +651,12 @@ document.addEventListener("input", function (e) {
     if (key === "eventTypeId") return render();
     return;
   }
-  if (el.getAttribute("data-field") === "schedQ") { S.schedQ = el.value; return render(); }
+  if (el.getAttribute("data-field") === "schedQ") {
+    var v = el.value;
+    clearTimeout(window.__schedQT);
+    window.__schedQT = setTimeout(function () { S.schedQ = v; render(); }, 150);
+    return;
+  }
   S.form[el.getAttribute("data-field")] = el.value;
 });
 
