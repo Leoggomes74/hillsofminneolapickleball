@@ -418,6 +418,7 @@ document.addEventListener("click", function (e) {
   if (act === "invite") { if (val) S.tourId = val; S.screen = "invite"; S.menu = null; window.scrollTo(0, 0); return render(); }
   if (act === "backevent") { S.screen = "event"; window.scrollTo(0, 0); return render(); }
   if (act === "schedall") { S.schedAll = val === "1"; window.scrollTo(0, 0); return render(); }
+  if (act === "schedqreset") { S.schedQ = ""; return render(); }
   if (act === "grpall") { S.grpAll = val === "1"; window.scrollTo(0, 0); return render(); }
   if (act === "invdl") return downloadInvite();
   if (act === "invreset") return needPin(resetInv);
@@ -650,6 +651,7 @@ document.addEventListener("input", function (e) {
     if (key === "eventTypeId") return render();
     return;
   }
+  if (el.getAttribute("data-field") === "schedQ") { S.schedQ = el.value; return render(); }
   S.form[el.getAttribute("data-field")] = el.value;
 });
 

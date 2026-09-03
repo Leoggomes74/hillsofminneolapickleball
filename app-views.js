@@ -459,9 +459,18 @@ function tabSched(t, cur, v) {
     h += '<div class="gfilter"><button class="gfb' + (all ? ' on' : '') + '" data-act="schedall" data-val="1">All events</button>' +
       '<button class="gfb' + (all ? '' : ' on') + '" data-act="schedall" data-val="0">' + esc(typeName(cur.eventTypeId)) + ' only</button></div>';
   }
+  var q = S.schedQ || "";
+  h += '<div class="qfilter"><input type="text" data-field="schedQ" value="' + esc(q) + '" placeholder="Find a team or player…">' +
+    (q ? '<button class="qreset" data-act="schedqreset">Reset</button>' : '') + '</div>';
   h += '<button class="fbtn ghost wide" data-act="autosort">Rebuild automatic order</button>';
   h += '<button class="fbtn ghost wide" data-act="openprint">⎙ Printable score sheets</button>';
-  if (!list.length) return h + '<div class="empty">No matches scheduled yet.</div><div class="pad"></div>';
+  if (q) {
+    var ql = q.toLowerCase();
+    list = list.filter(function (r) {
+      return (r.m.teamA + " " + r.m.teamB).toLowerCase().indexOf(ql) !== -1;
+    });
+  }
+  if (!list.length) return h + '<div class="empty">' + (q ? 'No matches found for “' + esc(q) + '”.' : 'No matches scheduled yet.') + '</div><div class="pad"></div>';
   h += '<div class="lbl rule">Running order</div>';
   list.forEach(function (r) {
     var m = r.m, i = r.court - 1, tappable = m.ready && !t.locked;
