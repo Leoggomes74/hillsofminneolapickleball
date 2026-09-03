@@ -118,7 +118,7 @@ function load(quiet) {
 
 function post(payload, okMsg) {
   if (!CLOUD) { toast("Offline — not saved"); return Promise.resolve(null); }
-  if (payload.action !== "note") payload.pin = S.pinUsed || "";
+  if (payload.action !== "note" && payload.action !== "waitlist") payload.pin = S.pinUsed || "";
   return fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
     .then(function (r) {
       if (r.status === 401) { S.unlocked = false; S.pinUsed = ""; try { sessionStorage.removeItem("hom.unlocked"); sessionStorage.removeItem("hom.pin"); } catch (e) {} throw new Error("passcode"); }
