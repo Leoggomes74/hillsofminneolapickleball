@@ -312,6 +312,8 @@ function viewEvent() {
 function tabNow(t, e, v) {
   var h = "", crts = {};
   TModel.master(t).forEach(function (r) { if (r.ev.id === e.id && r.courtName) crts[r.m.id] = r.courtName; });
+  var find = function (name) { return (e.teams || []).filter(function (x) { return x.name === name; })[0]; };
+  var pl = function (name) { var x = find(name); return x ? players(x.players) : ""; };
   if (t.locked) h += '<div class="snap">Scoring locked — results are final</div>';
   if (!v.live.length) {
     h += '<div class="note"><div class="k">' + (v.done.length ? "Nothing on court" : "Not started") + '</div><p>' +
@@ -320,8 +322,8 @@ function tabNow(t, e, v) {
     h += '<div class="lbl">On court now</div>';
     v.live.forEach(function (m) {
       h += '<div class="live"><div class="top"><span>' + esc(m.stageLabel) + (crts[m.id] ? ' · ' + esc(crts[m.id]) : '') + '</span><span>' + TModel.fmtLabel(m.fmtKey) + '</span></div>' +
-        '<div class="row"><div class="tm">' + esc(m.teamA) + '</div><div class="sc">' + (m.multi ? m.winsA : m.scoreA) + '</div></div>' +
-        '<div class="row"><div class="tm">' + esc(m.teamB) + '</div><div class="sc">' + (m.multi ? m.winsB : m.scoreB) + '</div></div>' +
+        '<div class="row"><div class="tm">' + esc(m.teamA) + (pl(m.teamA) ? '<span class="tmp">' + esc(pl(m.teamA)) + '</span>' : '') + '</div><div class="sc">' + (m.multi ? m.winsA : m.scoreA) + '</div></div>' +
+        '<div class="row"><div class="tm">' + esc(m.teamB) + (pl(m.teamB) ? '<span class="tmp">' + esc(pl(m.teamB)) + '</span>' : '') + '</div><div class="sc">' + (m.multi ? m.winsB : m.scoreB) + '</div></div>' +
         (t.locked ? '' : '<button class="act" data-act="score" data-val="' + m.id + '">Update score →</button>') + '</div>';
     });
   }
@@ -330,13 +332,13 @@ function tabNow(t, e, v) {
     v.next.forEach(function (m) {
       var tag = t.locked ? 'div' : 'button', att = t.locked ? '' : ' data-act="score" data-val="' + m.id + '"';
       h += '<' + tag + ' class="next"' + att + '><div><div class="no">#' + m.no + '</div><div class="cd">' + esc(shortStage(m)) + '</div>' + (crts[m.id] ? '<div class="cd crt">' + esc(crts[m.id]) + '</div>' : '') + '</div>' +
-        '<div><div class="t">' + esc(m.teamA) + '</div><div class="v">vs</div><div class="t">' + esc(m.teamB) + '</div></div></' + tag + '>';
+        '<div><div class="t">' + esc(m.teamA) + (pl(m.teamA) ? '<span class="tmp">' + esc(pl(m.teamA)) + '</span>' : '') + '</div><div class="v">vs</div><div class="t">' + esc(m.teamB) + (pl(m.teamB) ? '<span class="tmp">' + esc(pl(m.teamB)) + '</span>' : '') + '</div></div></' + tag + '>';
     });
   }
   if (v.done.length) {
     h += '<div class="lbl rule">Latest results</div>';
     v.done.slice(-3).reverse().forEach(function (m) {
-      h += '<div class="res"><div><div class="k">' + esc(m.stageLabel) + '</div><div class="t">' + esc(m.teamA) + '</div><div class="t">' + esc(m.teamB) + '</div></div>' +
+      h += '<div class="res"><div><div class="k">' + esc(m.stageLabel) + '</div><div class="t">' + esc(m.teamA) + (pl(m.teamA) ? '<span class="tmp">' + esc(pl(m.teamA)) + '</span>' : '') + '</div><div class="t">' + esc(m.teamB) + (pl(m.teamB) ? '<span class="tmp">' + esc(pl(m.teamB)) + '</span>' : '') + '</div></div>' +
         '<div class="s"><div style="opacity:0">·</div><div>' + (m.multi ? m.winsA : m.scoreA) + '</div><div>' + (m.multi ? m.winsB : m.scoreB) + '</div></div></div>';
     });
   }
