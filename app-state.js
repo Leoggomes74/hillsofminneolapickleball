@@ -419,6 +419,11 @@ document.addEventListener("click", function (e) {
   if (act === "backevent") { S.screen = "event"; window.scrollTo(0, 0); return render(); }
   if (act === "schedall") { S.schedAll = val === "1"; window.scrollTo(0, 0); return render(); }
   if (act === "schedqreset") { S.schedQ = ""; return render(); }
+  if (act === "schedqapply") {
+    var inp = document.querySelector('input[data-field="schedQ"]');
+    S.schedQ = inp ? inp.value : "";
+    return render();
+  }
   if (act === "grpall") { S.grpAll = val === "1"; window.scrollTo(0, 0); return render(); }
   if (act === "invdl") return downloadInvite();
   if (act === "invreset") return needPin(resetInv);
@@ -651,13 +656,15 @@ document.addEventListener("input", function (e) {
     if (key === "eventTypeId") return render();
     return;
   }
-  if (el.getAttribute("data-field") === "schedQ") {
-    var v = el.value;
-    clearTimeout(window.__schedQT);
-    window.__schedQT = setTimeout(function () { S.schedQ = v; render(); }, 150);
-    return;
-  }
+  if (el.getAttribute("data-field") === "schedQ") return;
   S.form[el.getAttribute("data-field")] = el.value;
+});
+document.addEventListener("keydown", function (e) {
+  if (e.key === "Enter" && e.target && e.target.getAttribute && e.target.getAttribute("data-field") === "schedQ") {
+    e.preventDefault();
+    S.schedQ = e.target.value;
+    render();
+  }
 });
 
 document.addEventListener("change", function (e) {

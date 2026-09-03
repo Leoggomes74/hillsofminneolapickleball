@@ -254,12 +254,16 @@ function knockoutBlurb(e) {
 }
 
 // ---- tournament: shared bits ----------------------------------------------
-function matchRow(m, cls, evId) {
+function matchRow(m, cls, evId, evTeams) {
   var open = m.ready && !tour().locked;
   var tag = open ? 'button' : 'div';
   var att = open ? (evId ? ' data-act="schedscore" data-val="' + evId + '|' + m.id + '"' : ' data-act="score" data-val="' + m.id + '"') : '';
+  var find = function (name) { return (evTeams || []).filter(function (x) { return x.name === name; })[0]; };
+  var pa = find(m.teamA), pb = find(m.teamB);
+  var pl = function (x) { return x ? players(x.players) : ""; };
   return '<' + tag + ' class="' + cls + '"' + att + '><div class="n">#' + m.no + '</div>' +
-    '<div class="t">' + esc(m.teamA) + '<br>' + esc(m.teamB) + '</div>' +
+    '<div class="t"><div>' + esc(m.teamA) + (pl(pa) ? '<span class="mp">' + esc(pl(pa)) + '</span>' : '') + '</div>' +
+    '<div>' + esc(m.teamB) + (pl(pb) ? '<span class="mp">' + esc(pl(pb)) + '</span>' : '') + '</div></div>' +
     '<div class="s' + (m.status === "live" ? " on" : "") + '">' + m.scoreLine + '</div></' + tag + '>';
 }
 
@@ -461,6 +465,7 @@ function tabSched(t, cur, v) {
   }
   var q = S.schedQ || "";
   h += '<div class="qfilter"><input type="text" data-field="schedQ" value="' + esc(q) + '" placeholder="Find a team or player…">' +
+    '<button class="qapply" data-act="schedqapply">Apply</button>' +
     (q ? '<button class="qreset" data-act="schedqreset">Reset</button>' : '') + '</div>';
   h += '<button class="fbtn ghost wide" data-act="autosort">Rebuild automatic order</button>';
   h += '<button class="fbtn ghost wide" data-act="openprint">⎙ Printable score sheets</button>';
@@ -532,11 +537,12 @@ function tabGroups(t, e, v) {
       h += '<div class="bar"><h2>' + (xv.tables.length > 1 ? 'Group ' + L(pi) : 'Standings') + '</h2><div class="meta">' + played + ' of ' + pg.length + ' played</div></div>';
       h += '<div class="sthead"><div>#</div><div>Team</div><div class="r">W</div><div class="r">L</div><div class="r">Diff</div></div>';
       rows.forEach(function (r) {
-        h += '<div class="strow' + (advances(x, xv, pi, r.pos) ? " adv" : "") + '"><div class="p">' + r.pos + '</div><div class="t">' + esc(r.team) + '</div>' +
+        h += '<div class="strow' + (advances(x, xv, pi, r.pos) ? " adv" : "") + '"><div class="p">' + r.pos + '</div>' +
+          '<div class="t">' + esc(r.team) + (players(r.players) ? '<span class="mp">' + esc(players(r.players)) + '</span>' : '') + '</div>' +
           '<div class="w">' + r.w + '</div><div class="l">' + r.l + '</div><div class="d">' + r.diff + '</div></div>';
       });
       h += '<div class="lbl">' + (xv.tables.length > 1 ? 'Group ' + L(pi) + ' matches' : 'Matches') + '</div>';
-      pg.forEach(function (m) { h += matchRow(m, "mrow", x.id === e.id ? null : x.id); });
+      pg.forEach(function (m) { h += matchRow(m, "mrow", x.id === e.id ? null : x.id, x.teams); });
       h += '</div>';
     });
     h += '</div>';
@@ -556,21 +562,24 @@ function tabBracket(t, e, v) {
   if (!ko) return '<div class="bar"><h2>Knockout</h2></div><div class="empty">This event is pool play only — the winner is top of the table.</div>';
   var h = '<div class="bar"><h2>Knockout</h2><div class="meta">' + (ko.seeded ? "Seeded" : "Awaiting pool results") + '</div></div>';
   h += '<div class="lbl">Semifinals · ' + TModel.fmtLabel(e.koFormat) + '</div>';
-  h += '<div class="kowrap">' + koCard(t, ko.sf[0]) + koCard(t, ko.sf[1]) + '</div>';
-  h += '<div class="lbl rule">Third place · ' + TModel.fmtLabel(e.koFormat) + '</div>' + koCard(t, ko.bronze);
+  h += '<div class="kowrap">' + koCard(t, ko.sf[0], null, e.teams) + koCard(t, ko.sf[1], null, e.teams) + '</div>';
+  h += '<div class="lbl rule">Third place · ' + TModel.fmtLabel(e.koFormat) + '</div>' + koCard(t, ko.bronze, null, e.teams);
   if (ko.third) h += '<div class="award">Third place · ' + esc(ko.third) + '</div>';
   h += '<div class="lbl rule">Final · ' + TModel.fmtLabel(e.finalFormat) + '</div>';
-  h += koCard(t, ko.final, "fin");
+  h += koCard(t, ko.final, "fin", e.teams);
   if (ko.champ) h += '<div class="award gold">Champions · ' + esc(ko.champ) + '</div>';
   h += '<div class="empty small">' + knockoutBlurb({ knockout: true, poolCount: v.tables.length }) + '</div><div class="pad"></div>';
   return h;
 }
-function koCard(t, m, cls) {
+function koCard(t, m, cls, evTeams) {
   var tappable = m.ready && !t.locked;
   var tag = tappable ? 'button' : 'div', att = tappable ? ' data-act="score" data-val="' + m.id + '"' : '';
   var head = m.stageLabel + (m.multi ? ' · ' + TModel.fmtLabel(m.fmtKey) : '') + (tappable ? ' · tap to score' : '');
+  var find = function (name) { return (evTeams || []).filter(function (x) { return x.name === name; })[0]; };
   var line = function (name, seed, val, win) {
-    return '<div class="s' + (win ? ' w' : '') + '"><div><div class="seed">' + esc(seed) + '</div><div class="tm">' + esc(name) + '</div></div>' +
+    var pl = find(name), pt = pl ? players(pl.players) : "";
+    return '<div class="s' + (win ? ' w' : '') + '"><div><div class="seed">' + esc(seed) + '</div><div><div class="tm">' + esc(name) + '</div>' +
+      (pt ? '<div class="tmp">' + esc(pt) + '</div>' : '') + '</div></div>' +
       (m.status === "upcoming" ? '<div></div>' : '<div class="num">' + val + '</div>') + '</div>';
   };
   var h = '<' + tag + ' class="sf ' + (cls || '') + '"' + att + '><div class="h">' + esc(head) + '</div>' +
