@@ -231,7 +231,7 @@ export default async function (req, res) {
     }
 
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
-    const OPEN = new Set(["note", "register"]);   // actions that need no passcode
+    const OPEN = new Set(["note", "register", "waitlist"]);   // actions that need no passcode
     if (!OPEN.has(body.action) && String(body.pin || "") !== String(PIN)) {
       return res.status(401).json({ error: "bad passcode" });
     }
