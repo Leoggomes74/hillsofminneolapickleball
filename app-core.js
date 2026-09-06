@@ -267,7 +267,11 @@ function elimAll(tour) {
   if (advance > 1 && bracketCount > 1) {
     var combinedTeams = [], maxRounds = 0;
     brackets.forEach(function (b) { maxRounds = Math.max(maxRounds, b.rounds); });
-    for (var r = 0; r < advance; r++) for (var b2 = 0; b2 < bracketCount; b2++) { var q = (brackets[b2].qualifiers || [])[r]; combinedTeams.push(q && q.name ? q : null); }
+    var bracketDone = brackets.map(function (b) { return b.matches.length === 0 || b.matches.every(function (m) { return m.status === "done"; }); });
+    for (var r = 0; r < advance; r++) for (var b2 = 0; b2 < bracketCount; b2++) {
+      var q = bracketDone[b2] ? (brackets[b2].qualifiers || [])[r] : null;
+      combinedTeams.push(q && q.name ? q : null);
+    }
     var core = elimCore(tour, combinedTeams, "C-", null, true, elimRoundLabel, maxRounds, false);
     combined = { matches: core.matches, champion: core.winners[0] ? core.winners[0].name : null };
     all = all.concat(combined.matches);
