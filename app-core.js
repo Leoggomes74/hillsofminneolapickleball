@@ -252,7 +252,7 @@ function elimBracketBuild(tour, idx, totalBrackets, advance) {
     // Manually-assigned byes skip round 1 entirely; everyone else plays it
     // to fill the remaining slots one round later.
     var r1 = elimCore(tour, playSet, "B" + idx + "-", 1, false,
-      function (cnt) { return "Round of " + (cnt * 2) + suffix; }, 0, true);
+      function (cnt) { return "Round of " + (cnt * 2) + suffix; }, 0, false);
     var nextInput = byeSet.map(function (t) { return { name: t.name }; }).concat(r1.winners);
     var bsize2 = nextPow2(nextInput.length), totalRounds2 = Math.log2(bsize2);
     var adv2 = Math.max(1, Math.min(advance, bsize2)), advPow2 = 1;
@@ -280,7 +280,7 @@ function elimBracketBuild(tour, idx, totalBrackets, advance) {
   var stopRound = totalRounds - Math.log2(advPow);
   var trueFinal = advPow === 1;
   var stage = elimCore(tour, allTeams, "B" + idx + "-", stopRound, trueFinal,
-    function (cnt) { return (trueFinal ? elimRoundLabel(cnt) : "Round of " + (cnt * 2)) + suffix; }, 0, true);
+    function (cnt) { return (trueFinal ? elimRoundLabel(cnt) : "Round of " + (cnt * 2)) + suffix; }, 0, false);
   var champion = trueFinal && stage.winners[0] ? stage.winners[0].name : null;
   return { idx: idx, teams: allTeams, matches: stage.matches, qualifiers: stage.winners, champion: champion, rounds: stage.rounds };
 }
