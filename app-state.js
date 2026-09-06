@@ -480,6 +480,19 @@ document.addEventListener("click", function (e) {
   }
   if (act === "courtpick") { S.courtPick = val; return render(); }
   if (act === "courtclose") { S.courtPick = null; return render(); }
+  if (act === "qualpick") { S.qualPick = val; return render(); }
+  if (act === "qualclose") { S.qualPick = null; return render(); }
+  if (act === "setqual") {
+    var qParts = val.split("@@"), qEid = qParts[0], qSlot = qParts[1], qTeam = qParts[2];
+    var tq = tour(); if (!tq) return;
+    var eq = (tq.events || []).filter(function (x) { return x.id === qEid; })[0]; if (!eq) return;
+    return needPin(function () {
+      eq.qualOverride = eq.qualOverride || {};
+      if (qTeam === "auto") delete eq.qualOverride[qSlot]; else eq.qualOverride[qSlot] = qTeam;
+      S.qualPick = null; cacheDb(); render();
+      post({ action: "setQual", tournamentId: tq.id, eventId: qEid, slot: qSlot, team: qTeam === "auto" ? "" : qTeam }, "Updated");
+    });
+  }
   if (act === "setcourt") {
     var cSep = val.indexOf("@@"), cKey = val.slice(0, cSep), cIdx = val.slice(cSep + 2);
     var tcm = tour(); if (!tcm) return;

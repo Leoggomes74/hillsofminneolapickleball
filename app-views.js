@@ -663,6 +663,46 @@ function koCard(t, m, cls, evTeams) {
   return h + '</' + tag + '>';
 }
 
+function qualCard(t, e, m, bracketCount) {
+  var ready = m.ready && !t.locked;
+  var mkSide = function (name, slot, win, val) {
+    var bIdx = (slot - 1) % bracketCount, rk = Math.floor((slot - 1) / bracketCount);
+    var slotKey = 'b' + bIdx + '-r' + rk;
+    var editBtn = t.locked ? '' : '<button class="qpick" data-act="qualpick" data-val="' + e.id + '|' + slotKey + '|' + bIdx + '">' + (name === "To be decided" ? "Assign" : "Change") + '</button>';
+    return '<div class="s' + (win ? ' w' : '') + '"><div><div class="tm">' + esc(name) + '</div>' + editBtn + '</div>' +
+      (m.status === "upcoming" ? '<div></div>' : '<div class="num">' + val + '</div>') + '</div>';
+  };
+  var h = '<div class="sf"><div class="h">' + esc(m.stageLabel) + '</div>' +
+    mkSide(m.teamA, m.slotA, m.winner === m.teamA, m.multi ? m.winsA : m.scoreA) +
+    mkSide(m.teamB, m.slotB, m.winner === m.teamB, m.multi ? m.winsB : m.scoreB);
+  if (m.multi && m.status !== "upcoming") {
+    h += '<div class="pips">' + m.games.map(function (g, i) {
+      return '<span>G' + (i + 1) + ' ' + (g.status === "upcoming" ? "\u2013" : g.a + "\u2013" + g.b) + '</span>';
+    }).join('') + '</div>';
+  }
+  if (ready) h += '<button class="qscore" data-act="score" data-val="' + m.id + '">Enter score \u2192</button>';
+  return h + '</div>';
+}
+
+function qualSheet() {
+  if (!S.qualPick) return "";
+  var t = tour(); if (!t) return "";
+  var parts = S.qualPick.split("|"), eid = parts[0], slotKey = parts[1], bIdx = +parts[2];
+  var e = (t.events || []).filter(function (x) { return x.id === eid; })[0]; if (!e) return "";
+  var teams = (e.teams || []).filter(function (x) { return (x.pool || 0) === bIdx; });
+  var cur = (e.qualOverride || {})[slotKey];
+  var btns = teams.map(function (x) {
+    return '<button class="cpick' + (cur === x.name ? ' on' : '') + '" data-act="setqual" data-val="' + eid + '@@' + slotKey + '@@' + x.name + '">' + esc(x.name) + '</button>';
+  }).join('');
+  return '<div class="back2" data-act="qualclose" data-back="1"><div class="sheet">' +
+    '<div class="h"><b>Assign \u00b7 Bracket ' + TModel.POOL_LETTERS[bIdx] + '</b><button data-act="qualclose">CLOSE</button></div>' +
+    '<div class="msg">Pick which team from this bracket fills this quarterfinal slot.</div>' +
+    '<div class="fsec"><div class="cpicks">' + (btns || '<div class="empty small">No entries in this bracket.</div>') + '</div>' +
+    '<div class="fnote">' + (cur ? 'Manually set. Reset to let the app fill it automatically once this bracket finishes.' : 'Not set \u2014 filled automatically once Bracket ' + TModel.POOL_LETTERS[bIdx] + ' finishes its games.') + '</div></div>' +
+    (cur ? '<button class="rm" data-act="setqual" data-val="' + eid + '@@' + slotKey + '@@auto">Back to automatic</button>' : '') +
+    '<div class="acts"><button class="lv" data-act="qualclose">Close</button></div></div></div>';
+}
+
 function tabElim(t, e, v) {
   var h = '<div class="bar"><h2>Bracket</h2><div class="meta">' + (v.elim.length > 1 ? v.elim.length + ' brackets' : 'Single elimination') + '</div></div>';
   var any = false;
@@ -685,7 +725,9 @@ function tabElim(t, e, v) {
     v.combined.matches.forEach(function (m) { (byRound2[m.roundRank] = byRound2[m.roundRank] || []).push(m); });
     Object.keys(byRound2).map(Number).sort(function (x, y) { return x - y; }).forEach(function (rk) {
       h += '<div class="lbl rule">' + esc(byRound2[rk][0].stageLabel) + '</div>';
-      h += '<div class="kowrap">' + byRound2[rk].map(function (m) { return koCard(t, m, m.stage === "final" ? "fin" : null, e.teams); }).join('') + '</div>';
+      h += '<div class="kowrap">' + byRound2[rk].map(function (m) {
+        return rk === v.combined.firstRoundRank ? qualCard(t, e, m, v.combined.bracketCount) : koCard(t, m, m.stage === "final" ? "fin" : null, e.teams);
+      }).join('') + '</div>';
     });
     if (v.combined.champion) h += '<div class="award gold">Champions \u00b7 ' + esc(v.combined.champion) + '</div>';
   }
@@ -1040,7 +1082,7 @@ function render() {
   else if (S.screen === "types") h = viewTypes();
   else if (S.screen === "new" || S.screen === "edit") h = S.form ? viewForm() : viewHome();
   else h = viewEvent();
-  h += sheet() + teamSheet() + courtSheet() + gate() + confirmBox();
+  h += sheet() + teamSheet() + courtSheet() + qualSheet() + gate() + confirmBox();
   if (S.toast) h += '<div class="toast"><span>' + esc(S.toast) + '</span></div>';
   document.getElementById("app").innerHTML = h;
   if (S.screen === "invite") {
