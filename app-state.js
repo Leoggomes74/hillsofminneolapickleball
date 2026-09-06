@@ -680,7 +680,7 @@ document.addEventListener("input", function (e) {
     var b = el.getAttribute("data-ef").split(":"), evf = S.form.events[+b[0]], key = b[1];
     if (key === "knockout") { evf.knockout = el.checked; return render(); }
     if (key === "regOpen") { evf.regOpen = el.checked; return render(); }
-    if (key === "teamCount" || key === "poolCount") { evf[key] = el.value; syncTeamRows(evf); return render(); }
+    if (key === "teamCount" || key === "poolCount") { evf[key] = el.value; syncTeamRows(evf); if (key === "poolCount") rebalance(evf); return render(); }
     evf[key] = el.value;
     if (key === "eventTypeId") return render();
     return;
@@ -704,6 +704,7 @@ document.addEventListener("change", function (e) {
   var b = el.getAttribute("data-ef").split(":"), evf = S.form.events[+b[0]], key = b[1];
   if (key === "knockout") { evf.knockout = el.checked; return render(); }
   if (key === "regOpen") { evf.regOpen = el.checked; return render(); }
+  if (key === "teamCount" || key === "poolCount") { evf[key] = el.value; syncTeamRows(evf); if (key === "poolCount") rebalance(evf); return render(); }
   evf[key] = el.value;
   render();
 });
