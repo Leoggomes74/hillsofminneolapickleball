@@ -481,6 +481,7 @@ document.addEventListener("click", function (e) {
   if (act === "courtpick") { S.courtPick = val; return render(); }
   if (act === "courtclose") { S.courtPick = null; return render(); }
   if (act === "qualpick") { S.qualPick = val; return render(); }
+  if (act === "elimview") { S.elimView = val; return render(); }
   if (act === "qualclose") { S.qualPick = null; return render(); }
   if (act === "togglebye") {
     var bParts = val.split("|"), bEid = bParts[0], bTeam = bParts[1];

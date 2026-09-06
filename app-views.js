@@ -726,8 +726,50 @@ function qualSheet() {
     '<div class="acts"><button class="lv" data-act="qualclose">Close</button></div></div></div>';
 }
 
+function elimTree(t, e, brackets, combined) {
+  var sections = [];
+  brackets.forEach(function (b, bi) {
+    if (!b.matches.length) return;
+    var byRound = {};
+    b.matches.forEach(function (m) { (byRound[m.roundRank] = byRound[m.roundRank] || []).push(m); });
+    var rounds = Object.keys(byRound).map(Number).sort(function (x, y) { return x - y; }).map(function (rk) { return { title: byRound[rk][0].stageLabel.split(' \u00b7 ')[0], matches: byRound[rk] }; });
+    sections.push({ label: brackets.length > 1 ? 'Bracket ' + TModel.POOL_LETTERS[bi] : null, rounds: rounds });
+  });
+  if (combined) {
+    var byRoundC = {};
+    combined.matches.forEach(function (m) { (byRoundC[m.roundRank] = byRoundC[m.roundRank] || []).push(m); });
+    var roundsC = Object.keys(byRoundC).map(Number).sort(function (x, y) { return x - y; }).map(function (rk) { return { title: byRoundC[rk][0].stageLabel, matches: byRoundC[rk] }; });
+    sections.push({ label: 'Combined bracket', rounds: roundsC });
+  }
+  if (!sections.length) return '<div class="empty">Not enough entries yet to build the bracket.</div>';
+  return sections.map(function (sec) {
+    return (sec.label ? '<div class="lbl rule">' + esc(sec.label) + '</div>' : '') +
+      '<div class="bttree">' + sec.rounds.map(function (r) {
+        return '<div class="btcol"><div class="btcolh">' + esc(r.title) + '</div><div class="btcolm">' +
+          r.matches.map(function (m) { return btCard(t, m); }).join('') + '</div></div>';
+      }).join('') + '</div>';
+  }).join('');
+}
+function btCard(t, m) {
+  var tappable = m.ready && !t.locked;
+  var att = tappable ? ' data-act="score" data-val="' + m.id + '"' : '';
+  var tag = tappable ? 'button' : 'div';
+  return '<' + tag + ' class="btm' + (m.status === "done" ? " done" : "") + '"' + att + '>' +
+    '<div class="btrow' + (m.winner === m.teamA ? ' win' : '') + '"><span>' + esc(m.teamA) + '</span><b>' + (m.status === "upcoming" ? '' : (m.multi ? m.winsA : m.scoreA)) + '</b></div>' +
+    '<div class="btrow' + (m.winner === m.teamB ? ' win' : '') + '"><span>' + esc(m.teamB) + '</span><b>' + (m.status === "upcoming" ? '' : (m.multi ? m.winsB : m.scoreB)) + '</b></div>' +
+    '</' + tag + '>';
+}
+
 function tabElim(t, e, v) {
+  var view = S.elimView === "tree" ? "tree" : "list";
   var h = '<div class="bar"><h2>Bracket</h2><div class="meta">' + (v.elim.length > 1 ? v.elim.length + ' brackets' : 'Single elimination') + '</div></div>';
+  h += '<div class="gfilter"><button class="gfb' + (view === "list" ? " on" : "") + '" data-act="elimview" data-val="list">List view</button>' +
+    '<button class="gfb' + (view === "tree" ? " on" : "") + '" data-act="elimview" data-val="tree">Tree view</button></div>';
+  if (view === "tree") {
+    h += elimTree(t, e, v.elim, v.combined);
+    h += '<div class="empty small">Single elimination \u2014 one loss and you\u2019re out.</div><div class="pad"></div>';
+    return h;
+  }
   var any = false;
   v.elim.forEach(function (b, bi) {
     if (v.elim.length > 1) h += '<div class="lbl' + (bi ? ' rule' : '') + '">Bracket ' + TModel.POOL_LETTERS[bi] + '</div>';
@@ -803,14 +845,28 @@ function tabTeams(t, e, v) {
   }
   var idxOf = {};
   (e.teams || []).forEach(function (x, i) { idxOf[x.name] = i; });
-  v.tables.forEach(function (rows, pi) {
-    if (v.tables.length > 1) h += '<div class="lbl" style="color:var(--green)">Group ' + L(pi) + '</div>';
-    rows.forEach(function (r) {
-      h += '<div class="team"><div><div class="n">' + esc(r.team) + '</div><div class="p">' + esc(players(r.players)) + '</div></div>' +
-        '<div class="r">' + r.rec + '</div>' +
-        (t.locked ? '' : '<button class="tedit" data-act="editteam" data-val="' + idxOf[r.team] + '">Edit</button>') + '</div>';
+  if (e.format === "elim") {
+    var pcB = Math.max(1, e.poolCount || 1);
+    for (var bi = 0; bi < pcB; bi++) {
+      var inB = (e.teams || []).filter(function (x) { return (x.pool || 0) === bi; });
+      if (!inB.length) continue;
+      if (pcB > 1) h += '<div class="lbl" style="color:var(--green)">Bracket ' + TModel.POOL_LETTERS[bi] + '</div>';
+      inB.forEach(function (x) {
+        h += '<div class="team"><div><div class="n">' + esc(x.name) + '</div><div class="p">' + esc(players(x.players)) + '</div></div>' +
+          '<div class="r"></div>' +
+          (t.locked ? '' : '<button class="tedit" data-act="editteam" data-val="' + idxOf[x.name] + '">Edit</button>') + '</div>';
+      });
+    }
+  } else {
+    v.tables.forEach(function (rows, pi) {
+      if (v.tables.length > 1) h += '<div class="lbl" style="color:var(--green)">Group ' + L(pi) + '</div>';
+      rows.forEach(function (r) {
+        h += '<div class="team"><div><div class="n">' + esc(r.team) + '</div><div class="p">' + esc(players(r.players)) + '</div></div>' +
+          '<div class="r">' + r.rec + '</div>' +
+          (t.locked ? '' : '<button class="tedit" data-act="editteam" data-val="' + idxOf[r.team] + '">Edit</button>') + '</div>';
+      });
     });
-  });
+  }
   h += waitList(t, e, single, n, cap);
   h += '<button class="fbtn ghost wide" data-act="openroster">⎙ Printable ' + (single ? 'player' : 'team') + ' list</button>';
   h += '<div class="empty small">Organizers: tap <b>Edit</b> on any entry to correct names, move it to another pool or remove it — passcode required.</div>';
