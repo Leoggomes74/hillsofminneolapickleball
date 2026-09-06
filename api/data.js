@@ -185,6 +185,7 @@ function sanitizeEvent(body, existing, requireTeamName) {
     eventTypeId: slug(body.eventTypeId || "mixed-doubles"),
     date: clean(body.date, 10),
     time: clean(body.time, 5),
+    format: body.format === "elim" ? "elim" : "pools",
     regOpen: body.regOpen !== false,
     maxTeams: Math.max(0, Math.min(32, parseInt(body.maxTeams, 10) || 0)),
     poolCount: Math.max(1, Math.min(8, parseInt(body.poolCount, 10) || 1)),
