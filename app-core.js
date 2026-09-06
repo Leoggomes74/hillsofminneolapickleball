@@ -246,11 +246,17 @@ function elimBracketBuild(tour, idx, totalBrackets, advance) {
   var bsize = nextPow2(teams.length), totalRounds = Math.log2(bsize);
   var adv = Math.max(1, Math.min(advance, bsize)), advPow = 1;
   while (advPow * 2 <= adv) advPow *= 2;
-  var stopRound = Math.max(1, totalRounds - Math.log2(advPow));
+  if (advPow >= bsize) {
+    var passThrough = [];
+    for (var s = 1; s <= bsize; s++) passThrough.push(teams[s - 1] ? { name: teams[s - 1].name } : null);
+    return { idx: idx, teams: teams, matches: [], qualifiers: passThrough, champion: null, rounds: 0 };
+  }
+  var stopRound = totalRounds - Math.log2(advPow);
   var suffix = totalBrackets > 1 ? " · Bracket " + POOL_LETTERS[idx] : "";
   var trueFinal = advPow === 1;
   var stage = elimCore(tour, teams, "B" + idx + "-", stopRound, trueFinal,
-    function (cnt) { return (trueFinal ? elimRoundLabel(cnt) : "Round of " + (cnt * 2)) + suffix; }, 0, true);  var champion = trueFinal && stage.winners[0] ? stage.winners[0].name : null;
+    function (cnt) { return (trueFinal ? elimRoundLabel(cnt) : "Round of " + (cnt * 2)) + suffix; }, 0, true);
+  var champion = trueFinal && stage.winners[0] ? stage.winners[0].name : null;
   return { idx: idx, teams: teams, matches: stage.matches, qualifiers: stage.winners, champion: champion, rounds: stage.rounds };
 }
 // All brackets, plus (when more than one team advances per bracket) a
