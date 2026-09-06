@@ -328,6 +328,7 @@ function knockout(tour, matches, tables) {
   var pair = seeds(tour, tables, complete);
   var lab = seedLabels(tables.length);
   var base = pm.length;
+  var ov = tour.qualOverride || {};
 
   function mk(id, offset, label, stage, fmtKey, a, b, sa, sb) {
     var m = { id: id, no: base + offset, stage: stage, stage_label: label,
@@ -336,8 +337,10 @@ function knockout(tour, matches, tables) {
     return decorate(tour, m);
   }
 
-  var sf1 = mk("SF1", 1, "Semifinal 1", "sf", tour.koFormat, pair && pair[0].a, pair && pair[0].b, pair ? pair[0].sa : lab[0][0], pair ? pair[0].sb : lab[0][1]);
-  var sf2 = mk("SF2", 2, "Semifinal 2", "sf", tour.koFormat, pair && pair[1].a, pair && pair[1].b, pair ? pair[1].sa : lab[1][0], pair ? pair[1].sb : lab[1][1]);
+  var a1 = ov.sf1a || (pair && pair[0].a), b1 = ov.sf1b || (pair && pair[0].b);
+  var a2 = ov.sf2a || (pair && pair[1].a), b2 = ov.sf2b || (pair && pair[1].b);
+  var sf1 = mk("SF1", 1, "Semifinal 1", "sf", tour.koFormat, a1, b1, pair ? pair[0].sa : lab[0][0], pair ? pair[0].sb : lab[0][1]);
+  var sf2 = mk("SF2", 2, "Semifinal 2", "sf", tour.koFormat, a2, b2, pair ? pair[1].sa : lab[1][0], pair ? pair[1].sb : lab[1][1]);
   var bronze = mk("BR", 3, "Third place", "bronze", tour.koFormat, sf1.loser, sf2.loser, "Loser SF1", "Loser SF2");
   var final = mk("FN", 4, "Final", "final", tour.finalFormat, sf1.winner, sf2.winner, "Winner SF1", "Winner SF2");
 

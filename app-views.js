@@ -632,7 +632,7 @@ function tabBracket(t, e, v) {
   if (!ko) return '<div class="bar"><h2>Knockout</h2></div><div class="empty">This event is pool play only — the winner is top of the table.</div>';
   var h = '<div class="bar"><h2>Knockout</h2><div class="meta">' + (ko.seeded ? "Seeded" : "Awaiting pool results") + '</div></div>';
   h += '<div class="lbl">Semifinals · ' + TModel.fmtLabel(e.koFormat) + '</div>';
-  h += '<div class="kowrap">' + koCard(t, ko.sf[0], null, e.teams) + koCard(t, ko.sf[1], null, e.teams) + '</div>';
+  h += '<div class="kowrap">' + koCardEditable(t, e, ko.sf[0], "sf1a", "sf1b") + koCardEditable(t, e, ko.sf[1], "sf2a", "sf2b") + '</div>';
   h += '<div class="lbl rule">Third place · ' + TModel.fmtLabel(e.koFormat) + '</div>' + koCard(t, ko.bronze, null, e.teams);
   if (ko.third) h += '<div class="award">Third place · ' + esc(ko.third) + '</div>';
   h += '<div class="lbl rule">Final · ' + TModel.fmtLabel(e.finalFormat) + '</div>';
@@ -641,6 +641,25 @@ function tabBracket(t, e, v) {
   h += '<div class="empty small">' + knockoutBlurb({ knockout: true, poolCount: v.tables.length }) + '</div><div class="pad"></div>';
   return h;
 }
+function koCardEditable(t, e, m, slotAKey, slotBKey) {
+  var ready = m.ready && !t.locked;
+  var mkSide = function (name, slotKey, win, val, seed) {
+    var editBtn = t.locked ? '' : '<button class="qpick" data-act="qualpick" data-val="' + e.id + '|' + slotKey + '|all">' + (name === "To be decided" ? "Assign" : "Change") + '</button>';
+    return '<div class="s' + (win ? ' w' : '') + '"><div><div class="seed">' + esc(seed) + '</div><div><div class="tm">' + esc(name) + '</div>' + editBtn + '</div></div>' +
+      (m.status === "upcoming" ? '<div></div>' : '<div class="num">' + val + '</div>') + '</div>';
+  };
+  var h = '<div class="sf"><div class="h">' + esc(m.stageLabel + (m.multi ? ' · ' + TModel.fmtLabel(m.fmtKey) : '')) + '</div>' +
+    mkSide(m.teamA, slotAKey, m.winner === m.teamA, m.multi ? m.winsA : m.scoreA, m.seedA) +
+    mkSide(m.teamB, slotBKey, m.winner === m.teamB, m.multi ? m.winsB : m.scoreB, m.seedB);
+  if (m.multi && m.status !== "upcoming") {
+    h += '<div class="pips">' + m.games.map(function (g, i) {
+      return '<span>G' + (i + 1) + ' ' + (g.status === "upcoming" ? "\u2013" : g.a + "\u2013" + g.b) + '</span>';
+    }).join('') + '</div>';
+  }
+  if (ready) h += '<button class="qscore" data-act="score" data-val="' + m.id + '">Enter score \u2192</button>';
+  return h + '</div>';
+}
+
 function koCard(t, m, cls, evTeams) {
   var tappable = m.ready && !t.locked;
   var tag = tappable ? 'button' : 'div', att = tappable ? ' data-act="score" data-val="' + m.id + '"' : '';
@@ -687,18 +706,22 @@ function qualCard(t, e, m, bracketCount) {
 function qualSheet() {
   if (!S.qualPick) return "";
   var t = tour(); if (!t) return "";
-  var parts = S.qualPick.split("|"), eid = parts[0], slotKey = parts[1], bIdx = +parts[2];
+  var parts = S.qualPick.split("|"), eid = parts[0], slotKey = parts[1], bRaw = parts[2];
   var e = (t.events || []).filter(function (x) { return x.id === eid; })[0]; if (!e) return "";
-  var teams = (e.teams || []).filter(function (x) { return (x.pool || 0) === bIdx; });
+  var bIdx = bRaw === "all" ? null : +bRaw;
+  var teams = bIdx == null ? (e.teams || []) : (e.teams || []).filter(function (x) { return (x.pool || 0) === bIdx; });
   var cur = (e.qualOverride || {})[slotKey];
   var btns = teams.map(function (x) {
     return '<button class="cpick' + (cur === x.name ? ' on' : '') + '" data-act="setqual" data-val="' + eid + '@@' + slotKey + '@@' + x.name + '">' + esc(x.name) + '</button>';
   }).join('');
+  var title = bIdx == null ? "Assign \u00b7 Semifinal" : "Assign \u00b7 Bracket " + TModel.POOL_LETTERS[bIdx];
   return '<div class="back2" data-act="qualclose" data-back="1"><div class="sheet">' +
-    '<div class="h"><b>Assign \u00b7 Bracket ' + TModel.POOL_LETTERS[bIdx] + '</b><button data-act="qualclose">CLOSE</button></div>' +
-    '<div class="msg">Pick which team from this bracket fills this quarterfinal slot.</div>' +
-    '<div class="fsec"><div class="cpicks">' + (btns || '<div class="empty small">No entries in this bracket.</div>') + '</div>' +
-    '<div class="fnote">' + (cur ? 'Manually set. Reset to let the app fill it automatically once this bracket finishes.' : 'Not set \u2014 filled automatically once Bracket ' + TModel.POOL_LETTERS[bIdx] + ' finishes its games.') + '</div></div>' +
+    '<div class="h"><b>' + title + '</b><button data-act="qualclose">CLOSE</button></div>' +
+    '<div class="msg">Pick which ' + (bIdx == null ? "entry" : "team from this bracket") + ' fills this slot.</div>' +
+    '<div class="fsec"><div class="cpicks">' + (btns || '<div class="empty small">No entries yet.</div>') + '</div>' +
+    '<div class="fnote">' + (cur
+      ? 'Manually set. Reset to let the app fill it automatically' + (bIdx == null ? '.' : ' once this bracket finishes.')
+      : 'Not set \u2014 filled automatically' + (bIdx == null ? ' from pool standings.' : ' once Bracket ' + TModel.POOL_LETTERS[bIdx] + ' finishes its games.')) + '</div></div>' +
     (cur ? '<button class="rm" data-act="setqual" data-val="' + eid + '@@' + slotKey + '@@auto">Back to automatic</button>' : '') +
     '<div class="acts"><button class="lv" data-act="qualclose">Close</button></div></div></div>';
 }
