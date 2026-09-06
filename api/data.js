@@ -203,7 +203,7 @@ function sanitizeEvent(body, existing, requireTeamName) {
 
 function sanitizeTournament(body, existing) {
   const prev = existing ? (existing.events || []) : [];
-  const requireTeamName = existing ? existing.requireTeamName !== false : (body.requireTeamName !== false);
+  const requireTeamName = body.requireTeamName !== false;
   const events = (Array.isArray(body.events) ? body.events : []).slice(0, 12)
     .map(e => sanitizeEvent(e, prev.find(p => p.id === (e && e.id)), requireTeamName));
   return {
@@ -220,7 +220,7 @@ function sanitizeTournament(body, existing) {
     courtNames: (Array.isArray(body.courtNames) ? body.courtNames : []).slice(0, 12).map(n => clean(n, 24)),
     courtMap: existing ? existing.courtMap || {} : {},
     notes: existing ? existing.notes || [] : [],
-    regActive: existing ? existing.regActive !== false : (body.regActive !== false),
+    regActive: body.regActive !== false,
     locked: existing ? !!existing.locked : false,
     archived: existing ? !!existing.archived : false,
     createdAt: existing ? existing.createdAt : Date.now()
