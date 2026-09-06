@@ -296,11 +296,11 @@ function formValid(f) {
     seen[e.eventTypeId] = 1;
     var single = typeSingles(e.eventTypeId), bad = 0;
     filledRows(e).forEach(function (t) {
-      if (!String(t.name).trim()) bad++;
+      if (f.requireTeamName && !String(t.name).trim()) bad++;
       if (!String(t.players[0]).trim()) bad++;
       if (!single && !String(t.players[1]).trim()) bad++;
     });
-    if (bad) { err = typeName(e.eventTypeId) + ": " + (single ? "every entry needs a name and a player." : "every team needs a name and two players."); return; }
+    if (bad) { err = typeName(e.eventTypeId) + ": " + (single ? "every entry needs a player." : "every team needs both players.") + (f.requireTeamName ? (single ? " and a name" : " and a team name") : ""); return; }
     if (e.regOpen) return;                       // registration will fill the pools
     var rows = filledRows(e);
     if (!rows.length) { err = typeName(e.eventTypeId) + ": add entries, or switch registration on so people can enter themselves."; return; }
@@ -552,6 +552,8 @@ document.addEventListener("click", function (e) {
   if (act === "autopool") { rebalance(S.form.events[+val]); return render(); }
   if (act === "addrow") {
     var ea = S.form.events[+val];
+    var eaCap = parseInt(ea.maxTeams, 10) || 0;
+    if (eaCap && ea.teams.length >= eaCap) { toast("Maximum entries for this event is " + eaCap); return; }
     if (ea.teams.length >= 32) { toast("32 entries is the maximum"); return; }
     ea.teams.push({ name: "", players: ["", ""], pool: smallestPool(ea.teams, Math.max(1, +ea.poolCount || 1)) });
     ea.teamCount = ea.teams.length; S.form.error = ""; return render();
