@@ -210,7 +210,7 @@ function blankEvent(typeId) {
   return {
     id: null, eventTypeId: typeId || (types()[0] || {}).id || "mixed-doubles",
     date: "", time: "08:00",
-    teamCount: 0, poolCount: 2, knockout: true, format: "pools",
+    teamCount: 0, poolCount: 2, knockout: true, format: "pools", advancePerBracket: 1,
     regOpen: true, maxTeams: 0,
     poolFormat: "to11win1", koFormat: "to11win2", finalFormat: "bo3to11",
     teams: []
@@ -273,6 +273,7 @@ function openEdit(id) {
         return {
           id: e.id, eventTypeId: e.eventTypeId, date: e.date || "", time: e.time || "",
           teamCount: (e.teams || []).length, poolCount: e.poolCount || 1, knockout: e.knockout !== false, format: e.format === "elim" ? "elim" : "pools",
+          advancePerBracket: e.advancePerBracket || 1,
           regOpen: e.regOpen !== false, maxTeams: e.maxTeams || 0,
           poolFormat: e.poolFormat, koFormat: e.koFormat, finalFormat: e.finalFormat,
           teams: (e.teams || []).map(function (x) {
@@ -330,6 +331,7 @@ function submitForm() {
       return {
         id: e.id, eventTypeId: e.eventTypeId, date: e.date || f.date, time: e.time || f.time,
         poolCount: parseInt(e.poolCount, 10) || 1, knockout: !!e.knockout, format: e.format === "elim" ? "elim" : "pools",
+        advancePerBracket: parseInt(e.advancePerBracket, 10) || 1,
         regOpen: !!e.regOpen, maxTeams: parseInt(e.maxTeams, 10) || 0,
         poolFormat: e.poolFormat, koFormat: e.koFormat, finalFormat: e.finalFormat,
         teams: filledRows(e).map(function (t) {

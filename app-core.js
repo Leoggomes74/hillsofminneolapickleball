@@ -192,54 +192,88 @@ function bracketTeams(tour, idx) {
   (tour.teams || []).forEach(function (t, ti) { if ((t.pool || 0) === idx) out.push({ name: t.name, players: t.players || [], idx: ti }); });
   return out;
 }
-function elimBracketBuild(tour, idx, totalBrackets) {
-  var teams = bracketTeams(tour, idx), size = teams.length;
-  if (size < 2) return { idx: idx, teams: teams, matches: [], totalRounds: 0, champion: null };
-  var bsize = nextPow2(size), order = seedOrder(bsize), totalRounds = Math.log2(bsize);
+// Generic single-elim runner over a seed-ordered team list (entries may be
+// null = bye/unfilled slot). Stops after `stopRound` rounds (null = play to
+// the end); only the very last round played is a "final" match when
+// trueFinalAtStop is set (used by the combined cross-bracket stage).
+function elimCore(tour, teams, idPrefix, stopRound, trueFinalAtStop, labelFn, rankOffset) {
+  var n = teams.length;
+  if (n < 2) return { matches: [], winners: teams.slice(), rounds: 0 };
+  var bsize = nextPow2(n), order = seedOrder(bsize), totalRounds = Math.log2(bsize);
+  var effStop = stopRound == null ? totalRounds : Math.min(stopRound, totalRounds);
   var slot = function (seedNum) { return teams[seedNum - 1] || null; };
-  var suffix = totalBrackets > 1 ? " · Bracket " + POOL_LETTERS[idx] : "";
   var matches = [], winners = [], r1n = bsize / 2, w1 = [];
   for (var k = 0; k < r1n; k++) {
     var A = slot(order[2 * k]), B = slot(order[2 * k + 1]);
     if (A && !B) { w1.push({ name: A.name }); continue; }
     if (B && !A) { w1.push({ name: B.name }); continue; }
     if (!A && !B) { w1.push(null); continue; }
-    var isFinal1 = totalRounds === 1;
+    var isLast1 = (1 === effStop), isFinal1 = isLast1 && trueFinalAtStop;
     var dec = decorate(tour, {
-      id: "B" + idx + "-R1-M" + k, stage: isFinal1 ? "final" : "elimR", roundRank: 1,
+      id: idPrefix + "R1-M" + k, stage: isFinal1 ? "final" : "elimR", roundRank: rankOffset + 1,
       teamA: A.name, teamB: B.name, fmtKey: isFinal1 ? tour.finalFormat : tour.koFormat,
-      ready: true, stage_label: elimRoundLabel(r1n) + suffix
+      ready: true, stage_label: labelFn(r1n)
     });
     matches.push(dec);
     w1.push({ name: dec.winner });
   }
   winners.push(w1);
-  for (var r = 2; r <= totalRounds; r++) {
+  for (var r = 2; r <= effStop; r++) {
     var prev = winners[r - 2], cnt = prev.length / 2, wr = [];
     for (var k2 = 0; k2 < cnt; k2++) {
       var pa = prev[2 * k2], pb = prev[2 * k2 + 1];
       var aName = pa ? pa.name : null, bName = pb ? pb.name : null;
-      var isFinal = r === totalRounds;
+      var isLast = (r === effStop), isFinal = isLast && trueFinalAtStop;
       var dec2 = decorate(tour, {
-        id: "B" + idx + "-R" + r + "-M" + k2, stage: isFinal ? "final" : "elimR", roundRank: r,
+        id: idPrefix + "R" + r + "-M" + k2, stage: isFinal ? "final" : "elimR", roundRank: rankOffset + r,
         teamA: aName || "To be decided", teamB: bName || "To be decided",
         fmtKey: isFinal ? tour.finalFormat : tour.koFormat, ready: !!(aName && bName),
-        stage_label: elimRoundLabel(cnt) + suffix
+        stage_label: labelFn(cnt)
       });
       matches.push(dec2);
       wr.push({ name: dec2.winner });
     }
     winners.push(wr);
   }
-  var last = winners[totalRounds - 1][0];
-  return { idx: idx, teams: teams, matches: matches, totalRounds: totalRounds, champion: last ? last.name : null };
+  return { matches: matches, winners: winners[effStop - 1] || teams, rounds: effStop };
 }
+// One bracket's internal elimination, stopping once it's down to `advance`
+// qualifiers (advance=1 plays the bracket to its own champion).
+function elimBracketBuild(tour, idx, totalBrackets, advance) {
+  var teams = bracketTeams(tour, idx);
+  if (teams.length < 2) return { idx: idx, teams: teams, matches: [], qualifiers: teams.map(function (t) { return { name: t.name }; }), champion: null, rounds: 0 };
+  var bsize = nextPow2(teams.length), totalRounds = Math.log2(bsize);
+  var adv = Math.max(1, Math.min(advance, bsize)), advPow = 1;
+  while (advPow * 2 <= adv) advPow *= 2;
+  var stopRound = Math.max(1, totalRounds - Math.log2(advPow));
+  var suffix = totalBrackets > 1 ? " · Bracket " + POOL_LETTERS[idx] : "";
+  var trueFinal = advPow === 1;
+  var stage = elimCore(tour, teams, "B" + idx + "-", stopRound, trueFinal,
+    function (cnt) { return (trueFinal ? elimRoundLabel(cnt) : "Round of " + (cnt * 2)) + suffix; }, 0);
+  var champion = trueFinal && stage.winners[0] ? stage.winners[0].name : null;
+  return { idx: idx, teams: teams, matches: stage.matches, qualifiers: stage.winners, champion: champion, rounds: stage.rounds };
+}
+// All brackets, plus (when more than one team advances per bracket) a
+// combined cross-bracket knockout seeded from each bracket's qualifiers.
 function elimAll(tour) {
-  var n = Math.max(1, Math.min(8, parseInt(tour.poolCount, 10) || 1)), brackets = [];
-  for (var i = 0; i < n; i++) brackets.push(elimBracketBuild(tour, i, n));
+  var bracketCount = Math.max(1, Math.min(8, parseInt(tour.poolCount, 10) || 1));
+  var advance = Math.max(1, Math.min(16, parseInt(tour.advancePerBracket, 10) || 1));
+  var brackets = [];
+  for (var i = 0; i < bracketCount; i++) brackets.push(elimBracketBuild(tour, i, bracketCount, advance));
   var all = [];
   brackets.forEach(function (b) { all = all.concat(b.matches); });
-  return { brackets: brackets, all: all };
+  var combined = null;
+  if (advance > 1 && bracketCount > 1) {
+    var combinedTeams = [], maxRounds = 0;
+    brackets.forEach(function (b) { maxRounds = Math.max(maxRounds, b.rounds); });
+    for (var r = 0; r < advance; r++) for (var b2 = 0; b2 < bracketCount; b2++) { var q = (brackets[b2].qualifiers || [])[r]; combinedTeams.push(q && q.name ? q : null); }
+    var core = elimCore(tour, combinedTeams, "C-", null, true, elimRoundLabel, maxRounds);
+    combined = { matches: core.matches, champion: core.winners[0] ? core.winners[0].name : null };
+    all = all.concat(combined.matches);
+  }
+  var no = 0;
+  all.forEach(function (m) { m.no = ++no; });
+  return { brackets: brackets, combined: combined, all: all };
 }
 
 // ---- knockout --------------------------------------------------------------
@@ -314,7 +348,7 @@ function build(tour) {
   if (tour.format === "elim") {
     var ex = elimAll(tour), all = ex.all;
     return {
-      tour: tour, pool: [], tables: [], ko: null, elim: ex.brackets, all: all,
+      tour: tour, pool: [], tables: [], ko: null, elim: ex.brackets, combined: ex.combined, all: all,
       scheduled: all.length,
       live: all.filter(function (m) { return m.status === "live"; }),
       done: all.filter(function (m) { return m.status === "done"; }),
@@ -349,6 +383,7 @@ function autoOrder(tour) {
     pools.push(v.pool.map(function (m) { return e.id + "|" + m.id; }));
     kos.push(v.ko ? ["SF1", "SF2", "BR", "FN"].map(function (id) { return e.id + "|" + id; }) : []);
     if (v.elim) v.elim.forEach(function (b) { b.matches.forEach(function (m) { elims.push(e.id + "|" + m.id); }); });
+    if (v.combined) v.combined.matches.forEach(function (m) { elims.push(e.id + "|" + m.id); });
   });
   var out = [], i, k, most = 0;
   pools.forEach(function (q) { most = Math.max(most, q.length); });

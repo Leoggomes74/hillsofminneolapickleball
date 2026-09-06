@@ -203,6 +203,12 @@ function viewForm() {
       if (e.format === "elim") {
         h += '<div class="fnote">' + (e.teamCount ? e.teamCount + ' ' + (single ? 'players' : 'teams') : 'No entries yet') + ' across ' + e.poolCount + ' bracket' + (e.poolCount > 1 ? 's' : '') +
           (e.teamCount ? ' — ' + elimMatchCount(e) + ' matches to a champion.' : ' — the draw builds itself as people register.') + '</div>';
+        if (e.poolCount > 1) {
+          h += '<div class="fsec"><label>Teams advancing per bracket</label><input type="number" min="1" max="16" data-ef="' + i + ':advancePerBracket" value="' + (e.advancePerBracket || 1) + '">' +
+            '<div class="fnote">' + (e.advancePerBracket > 1
+              ? 'Each bracket plays down to ' + e.advancePerBracket + ', then the ' + (e.advancePerBracket * e.poolCount) + ' qualifiers cross over into one combined knockout.'
+              : 'Leave at 1 for each bracket to play down to its own champion, with no combined stage.') + '</div></div>';
+        }
         h += '<div class="fsec"><label>Match format</label>' + selectEl("data-ef", i + ":koFormat", e.koFormat, fmtOpts) + '</div>';
         h += '<div class="fsec last"><label>Final format</label>' + selectEl("data-ef", i + ":finalFormat", e.finalFormat, fmtOpts) + '</div>';
       } else {
@@ -672,8 +678,19 @@ function tabElim(t, e, v) {
     });
     if (b.champion) h += '<div class="award gold">Champion \u00b7 ' + esc(b.champion) + '</div>';
   });
+  if (v.combined) {
+    any = true;
+    h += '<div class="lbl rule" style="margin-top:4px">Combined bracket</div>';
+    var byRound2 = {};
+    v.combined.matches.forEach(function (m) { (byRound2[m.roundRank] = byRound2[m.roundRank] || []).push(m); });
+    Object.keys(byRound2).map(Number).sort(function (x, y) { return x - y; }).forEach(function (rk) {
+      h += '<div class="lbl rule">' + esc(byRound2[rk][0].stageLabel) + '</div>';
+      h += '<div class="kowrap">' + byRound2[rk].map(function (m) { return koCard(t, m, m.stage === "final" ? "fin" : null, e.teams); }).join('') + '</div>';
+    });
+    if (v.combined.champion) h += '<div class="award gold">Champions \u00b7 ' + esc(v.combined.champion) + '</div>';
+  }
   if (!any) h += '<div class="empty">Not enough entries yet to build the bracket \u2014 at least two per bracket.</div>';
-  h += '<div class="empty small">Single elimination \u2014 one loss and you\u2019re out. Byes go to the top seeds when the bracket size isn\u2019t a power of two.</div><div class="pad"></div>';
+  h += '<div class="empty small">Single elimination \u2014 one loss and you\u2019re out.' + (v.combined ? ' Top finishers from each bracket cross over into a combined knockout.' : ' Byes go to the top seeds when the bracket size isn\u2019t a power of two.') + '</div><div class="pad"></div>';
   return h;
 }
 
@@ -755,6 +772,10 @@ function tabRecap(t, e, v) {
     h += '<div class="kpi"><div><b>' + v.done.length + '</b><span>Matches played</span></div><div><b>' + pts + '</b><span>Points scored</span></div>' +
       '<div><b>' + (v.done.length ? (pts / v.done.length).toFixed(1) : "0") + '</b><span>Avg points per match</span></div>' +
       '<div><b>' + v.elim.length + '</b><span>Bracket' + (v.elim.length > 1 ? 's' : '') + '</span></div></div>';
+    if (v.combined && v.combined.champion) {
+      h += '<div class="podium"><div class="top"><div class="lbl">★ Champion · ' + esc(typeName(e.eventTypeId)) + '</div>' +
+        '<div class="nm">' + esc(v.combined.champion) + '</div><div class="pl">' + esc(names[v.combined.champion] || "") + '</div></div></div>';
+    }
     v.elim.forEach(function (b, bi) {
       if (!b.champion) return;
       h += '<div class="podium"><div class="top"><div class="lbl">' + (v.elim.length > 1 ? '★ Bracket ' + TModel.POOL_LETTERS[bi] + ' champion' : '★ Champion · ' + esc(typeName(e.eventTypeId))) + '</div>' +
