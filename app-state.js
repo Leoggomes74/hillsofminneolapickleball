@@ -210,7 +210,7 @@ function blankEvent(typeId) {
   return {
     id: null, eventTypeId: typeId || (types()[0] || {}).id || "mixed-doubles",
     date: "", time: "08:00",
-    teamCount: 0, poolCount: 2, knockout: true,
+    teamCount: 0, poolCount: 2, knockout: true, format: "pools",
     regOpen: true, maxTeams: 0,
     poolFormat: "to11win1", koFormat: "to11win2", finalFormat: "bo3to11",
     teams: []
@@ -272,7 +272,7 @@ function openEdit(id) {
       events: evsOf(t).map(function (e) {
         return {
           id: e.id, eventTypeId: e.eventTypeId, date: e.date || "", time: e.time || "",
-          teamCount: (e.teams || []).length, poolCount: e.poolCount || 1, knockout: e.knockout !== false,
+          teamCount: (e.teams || []).length, poolCount: e.poolCount || 1, knockout: e.knockout !== false, format: e.format === "elim" ? "elim" : "pools",
           regOpen: e.regOpen !== false, maxTeams: e.maxTeams || 0,
           poolFormat: e.poolFormat, koFormat: e.koFormat, finalFormat: e.finalFormat,
           teams: (e.teams || []).map(function (x) {
@@ -329,7 +329,7 @@ function submitForm() {
       var single = typeSingles(e.eventTypeId);
       return {
         id: e.id, eventTypeId: e.eventTypeId, date: e.date || f.date, time: e.time || f.time,
-        poolCount: parseInt(e.poolCount, 10) || 1, knockout: !!e.knockout,
+        poolCount: parseInt(e.poolCount, 10) || 1, knockout: !!e.knockout, format: e.format === "elim" ? "elim" : "pools",
         regOpen: !!e.regOpen, maxTeams: parseInt(e.maxTeams, 10) || 0,
         poolFormat: e.poolFormat, koFormat: e.koFormat, finalFormat: e.finalFormat,
         teams: filledRows(e).map(function (t) {
@@ -538,6 +538,11 @@ document.addEventListener("click", function (e) {
   if (act === "delev") {
     if (S.form.events.length < 2) { toast("A tournament needs one event"); return; }
     S.form.events.splice(+val, 1); S.form.error = ""; return render();
+  }
+  if (act === "setformat") {
+    var pf = val.split(":"), evfmt = S.form.events[+pf[0]];
+    evfmt.format = pf[1] === "elim" ? "elim" : "pools";
+    return render();
   }
   if (act === "pool") {
     var bits = val.split(":");

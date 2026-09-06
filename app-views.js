@@ -186,7 +186,7 @@ function viewForm() {
       h += '<div class="fsec two"><div><label>Date</label><input type="date" data-ef="' + i + ':date" value="' + esc(e.date) + '"></div>' +
         '<div><label>Start time</label><input type="time" data-ef="' + i + ':time" value="' + esc(e.time) + '"></div></div>';
       h += '<div class="fsec two"><div><label>' + (single ? 'Players' : 'Teams') + ' now</label><input type="number" min="0" max="32" data-ef="' + i + ':teamCount" value="' + e.teamCount + '"></div>' +
-        '<div><label>Pools</label><input type="number" min="1" max="8" data-ef="' + i + ':poolCount" value="' + e.poolCount + '"></div></div>';
+        '<div><label>' + (e.format === "elim" ? 'Brackets' : 'Pools') + '</label><input type="number" min="1" max="8" data-ef="' + i + ':poolCount" value="' + e.poolCount + '"></div></div>';
       h += '<div class="fsec check"><label><input type="checkbox" data-ef="' + i + ':regOpen"' + (e.regOpen ? ' checked' : '') + '> Let people register themselves</label>' +
         '<div class="fnote">' + (e.regOpen
           ? 'Anyone can add their team on the Teams page — no passcode. Entries drop into the emptiest pool and you can edit or remove them here afterwards.'
@@ -194,14 +194,27 @@ function viewForm() {
       if (e.regOpen) {
         h += '<div class="fsec"><label>Maximum entries (0 = no limit)</label><input type="number" min="0" max="32" data-ef="' + i + ':maxTeams" value="' + (e.maxTeams || 0) + '"></div>';
       }
-      h += '<div class="fnote">' + (e.teamCount ? e.teamCount + ' ' + (single ? 'players' : 'teams') : 'No entries yet') + ' in ' + e.poolCount + ' pool' + (e.poolCount > 1 ? 's' : '') +
-        (e.teamCount ? ' — round robin inside each pool, ' + roundRobinCount(e) + ' matches.' : ' — the schedule builds itself as people register.') + '</div>';
-      h += '<div class="fsec"><label>Pool game format</label>' + selectEl("data-ef", i + ":poolFormat", e.poolFormat, fmtOpts) + '</div>';
-      h += '<div class="fsec check"><label><input type="checkbox" data-ef="' + i + ':knockout"' + (e.knockout ? ' checked' : '') + '> Play a knockout stage</label>' +
-        '<div class="fnote">' + knockoutBlurb(e) + '</div></div>';
-      if (e.knockout) {
-        h += '<div class="fsec"><label>Semifinals &amp; third place format</label>' + selectEl("data-ef", i + ":koFormat", e.koFormat, fmtOpts) + '</div>';
+      h += '<div class="fsec"><label>Format</label><div class="pools">' +
+        '<button type="button" class="pbtn wide' + (e.format !== "elim" ? ' on' : '') + '" data-act="setformat" data-val="' + i + ':pools">Pool play' + (e.format !== "elim" ? " + knockout" : "") + '</button>' +
+        '<button type="button" class="pbtn wide' + (e.format === "elim" ? ' on' : '') + '" data-act="setformat" data-val="' + i + ':elim">Single elimination</button></div>' +
+        '<div class="fnote">' + (e.format === "elim"
+          ? 'Straight knockout from the first round — one loss and you\u2019re out. No round robin.'
+          : 'Round robin pools, then a knockout stage to decide the placings.') + '</div></div>';
+      if (e.format === "elim") {
+        h += '<div class="fnote">' + (e.teamCount ? e.teamCount + ' ' + (single ? 'players' : 'teams') : 'No entries yet') + ' across ' + e.poolCount + ' bracket' + (e.poolCount > 1 ? 's' : '') +
+          (e.teamCount ? ' — ' + elimMatchCount(e) + ' matches to a champion.' : ' — the draw builds itself as people register.') + '</div>';
+        h += '<div class="fsec"><label>Match format</label>' + selectEl("data-ef", i + ":koFormat", e.koFormat, fmtOpts) + '</div>';
         h += '<div class="fsec last"><label>Final format</label>' + selectEl("data-ef", i + ":finalFormat", e.finalFormat, fmtOpts) + '</div>';
+      } else {
+        h += '<div class="fnote">' + (e.teamCount ? e.teamCount + ' ' + (single ? 'players' : 'teams') : 'No entries yet') + ' in ' + e.poolCount + ' pool' + (e.poolCount > 1 ? 's' : '') +
+          (e.teamCount ? ' — round robin inside each pool, ' + roundRobinCount(e) + ' matches.' : ' — the schedule builds itself as people register.') + '</div>';
+        h += '<div class="fsec"><label>Pool game format</label>' + selectEl("data-ef", i + ":poolFormat", e.poolFormat, fmtOpts) + '</div>';
+        h += '<div class="fsec check"><label><input type="checkbox" data-ef="' + i + ':knockout"' + (e.knockout ? ' checked' : '') + '> Play a knockout stage</label>' +
+          '<div class="fnote">' + knockoutBlurb(e) + '</div></div>';
+        if (e.knockout) {
+          h += '<div class="fsec"><label>Semifinals &amp; third place format</label>' + selectEl("data-ef", i + ":koFormat", e.koFormat, fmtOpts) + '</div>';
+          h += '<div class="fsec last"><label>Final format</label>' + selectEl("data-ef", i + ":finalFormat", e.finalFormat, fmtOpts) + '</div>';
+        }
       }
       h += '</div>';
     });
@@ -255,6 +268,13 @@ function roundRobinCount(e) {
   var n = 0;
   Object.keys(counts).forEach(function (k) { var c = counts[k]; n += c * (c - 1) / 2; });
   return n + (e.knockout ? 4 : 0);
+}
+function elimMatchCount(e) {
+  var pools = TModel.assignPools(e.teamCount, e.poolCount), counts = {};
+  pools.forEach(function (p) { counts[p] = (counts[p] || 0) + 1; });
+  var n = 0;
+  Object.keys(counts).forEach(function (k) { n += Math.max(0, counts[k] - 1); });
+  return n;
 }
 function knockoutBlurb(e) {
   if (!e.knockout) return "Pool play only — the winner is top of the table.";
@@ -313,7 +333,8 @@ function viewEvent() {
   if (S.tab === "info") h += tabInfo(t, e, v);
 
   var tabs = [["now", "Now"], ["sched", "Order"], ["groups", "Groups"], ["bracket", "Bracket"], ["teams", "Teams"], ["recap", "Recap"], ["notes", "Say"], ["info", "Info"]];
-  if (!e.knockout) tabs.splice(3, 1);
+  if (e.format === "elim") tabs = tabs.filter(function (x) { return x[0] !== "groups"; });
+  else if (!e.knockout) tabs = tabs.filter(function (x) { return x[0] !== "bracket"; });
   h += '<div class="nav"><div style="grid-template-columns:repeat(' + tabs.length + ',1fr)">' +
     tabs.map(function (x) {
       return '<button class="' + (S.tab === x[0] ? "on" : "") + '" data-act="tab" data-val="' + x[0] + '">' + x[1] + '</button>';
@@ -426,7 +447,7 @@ function viewRoster() {
     for (pi = 0; pi < pc; pi++) {
       var inPool = teams.filter(function (q) { return (q.pool || 0) === pi; });
       if (!inPool.length) continue;
-      if (pc > 1) h += '<div class="rpool">Group ' + L(pi) + '</div>';
+      if (pc > 1) h += '<div class="rpool">' + (x.format === "elim" ? 'Bracket ' : 'Group ') + L(pi) + '</div>';
       inPool.forEach(function (q) {
         k++;
         h += '<div class="rrow"><div class="rn">' + k + '</div>' +
@@ -600,6 +621,7 @@ function advances(e, v, poolIndex, pos) {
 }
 
 function tabBracket(t, e, v) {
+  if (e.format === "elim") return tabElim(t, e, v);
   var ko = v.ko;
   if (!ko) return '<div class="bar"><h2>Knockout</h2></div><div class="empty">This event is pool play only — the winner is top of the table.</div>';
   var h = '<div class="bar"><h2>Knockout</h2><div class="meta">' + (ko.seeded ? "Seeded" : "Awaiting pool results") + '</div></div>';
@@ -635,11 +657,31 @@ function koCard(t, m, cls, evTeams) {
   return h + '</' + tag + '>';
 }
 
+function tabElim(t, e, v) {
+  var h = '<div class="bar"><h2>Bracket</h2><div class="meta">' + (v.elim.length > 1 ? v.elim.length + ' brackets' : 'Single elimination') + '</div></div>';
+  var any = false;
+  v.elim.forEach(function (b, bi) {
+    if (v.elim.length > 1) h += '<div class="lbl' + (bi ? ' rule' : '') + '">Bracket ' + TModel.POOL_LETTERS[bi] + '</div>';
+    if (!b.matches.length) { h += '<div class="empty small">Waiting for entries in this bracket.</div>'; return; }
+    any = true;
+    var byRound = {};
+    b.matches.forEach(function (m) { (byRound[m.roundRank] = byRound[m.roundRank] || []).push(m); });
+    Object.keys(byRound).map(Number).sort(function (x, y) { return x - y; }).forEach(function (rk) {
+      h += '<div class="lbl rule">' + esc(byRound[rk][0].stageLabel.split(' \u00b7 ')[0]) + '</div>';
+      h += '<div class="kowrap">' + byRound[rk].map(function (m) { return koCard(t, m, m.stage === "final" ? "fin" : null, e.teams); }).join('') + '</div>';
+    });
+    if (b.champion) h += '<div class="award gold">Champion \u00b7 ' + esc(b.champion) + '</div>';
+  });
+  if (!any) h += '<div class="empty">Not enough entries yet to build the bracket \u2014 at least two per bracket.</div>';
+  h += '<div class="empty small">Single elimination \u2014 one loss and you\u2019re out. Byes go to the top seeds when the bracket size isn\u2019t a power of two.</div><div class="pad"></div>';
+  return h;
+}
+
 function tabTeams(t, e, v) {
   var single = typeSingles(e.eventTypeId);
   var n = (e.teams || []).length, cap = e.maxTeams || 0;
   var open = e.regOpen !== false && !t.locked && t.regActive !== false && (!cap || n < cap);
-  var h = '<div class="bar"><h2>' + (single ? 'Players' : 'Teams') + '</h2><div class="meta">' + n + (cap ? ' of ' + cap : '') + ' · ' + e.poolCount + ' pool' + (e.poolCount > 1 ? 's' : '') + '</div></div>';
+  var h = '<div class="bar"><h2>' + (single ? 'Players' : 'Teams') + '</h2><div class="meta">' + n + (cap ? ' of ' + cap : '') + ' · ' + e.poolCount + (e.format === "elim" ? ' bracket' : ' pool') + (e.poolCount > 1 ? 's' : '') + '</div></div>';
   if (t.regActive === false) h += '<div class="empty small">Registration is currently closed for this tournament.</div>';
 
   if (open) {
@@ -705,10 +747,32 @@ function waitList(t, e, single, n, cap) {
 function tabRecap(t, e, v) {
   var h = '<div class="bar"><h2>Recap</h2><div class="meta">' + v.done.length + ' of ' + v.scheduled + ' matches</div></div>';
   if (!v.done.length) return h + '<div class="empty">Nothing to recap yet. As matches are scored, this page fills in with the podium, the numbers and the standings.</div>';
-  var ko = v.ko, names = {};
+  var names = {};
   (e.teams || []).forEach(function (x) { names[x.name] = players(x.players); });
   var pts = 0;
   v.done.forEach(function (m) { pts += m.ptsA + m.ptsB; });
+  if (e.format === "elim") {
+    h += '<div class="kpi"><div><b>' + v.done.length + '</b><span>Matches played</span></div><div><b>' + pts + '</b><span>Points scored</span></div>' +
+      '<div><b>' + (v.done.length ? (pts / v.done.length).toFixed(1) : "0") + '</b><span>Avg points per match</span></div>' +
+      '<div><b>' + v.elim.length + '</b><span>Bracket' + (v.elim.length > 1 ? 's' : '') + '</span></div></div>';
+    v.elim.forEach(function (b, bi) {
+      if (!b.champion) return;
+      h += '<div class="podium"><div class="top"><div class="lbl">' + (v.elim.length > 1 ? '★ Bracket ' + TModel.POOL_LETTERS[bi] + ' champion' : '★ Champion · ' + esc(typeName(e.eventTypeId))) + '</div>' +
+        '<div class="nm">' + esc(b.champion) + '</div><div class="pl">' + esc(names[b.champion] || "") + '</div></div></div>';
+    });
+    var kdone2 = v.done;
+    if (kdone2.length) {
+      h += '<div class="lbl rule">Results</div>';
+      kdone2.forEach(function (m) {
+        h += '<div class="ktile"><div class="h2">' + esc(m.stageLabel) + '</div>' +
+          '<div class="l' + (m.winner === m.teamA ? " w" : "") + '"><span>' + esc(m.teamA) + '</span><b>' + (m.multi ? m.winsA : m.scoreA) + '</b></div>' +
+          '<div class="l' + (m.winner === m.teamB ? " w" : "") + '"><span>' + esc(m.teamB) + '</span><b>' + (m.multi ? m.winsB : m.scoreB) + '</b></div></div>';
+      });
+    }
+    h += '<div class="hl thanks"><div>Thank you to all ' + (e.teams || []).length + ' entries in the ' + esc(typeName(e.eventTypeId)) + ' — ' + v.done.length + ' matches played, every line called honestly and every match finished with a handshake at the net.</div></div>';
+    return h + '<div class="pad"></div>';
+  }
+  var ko = v.ko;
   var margins = v.done.map(function (m) { return { m: m, gap: Math.abs(m.ptsA - m.ptsB) }; });
   var close = margins.slice().sort(function (x, y) { return x.gap - y.gap; })[0];
   var wide = margins.slice().sort(function (x, y) { return y.gap - x.gap; })[0];
@@ -800,20 +864,27 @@ function tabInfo(t, e, v) {
     var xv = TModel.build(x);
     h += '<div class="erow' + (x.id === e.id ? ' on' : '') + '"><div><div class="en">' + esc(typeName(x.eventTypeId)) + '</div>' +
       '<div class="ed">' + esc(when(x)) + '</div>' +
-      '<div class="ed">' + (x.teams || []).length + (typeSingles(x.eventTypeId) ? ' players' : ' teams') + ' · ' + x.poolCount + ' pool' + (x.poolCount > 1 ? 's' : '') +
-      ' · ' + (x.knockout ? 'knockout' : 'pool play only') +
+      '<div class="ed">' + (x.teams || []).length + (typeSingles(x.eventTypeId) ? ' players' : ' teams') + ' · ' + x.poolCount + (x.format === "elim" ? ' bracket' : ' pool') + (x.poolCount > 1 ? 's' : '') +
+      ' · ' + (x.format === "elim" ? 'single elimination' : (x.knockout ? 'knockout' : 'pool play only')) +
       (x.regOpen !== false && !t.locked ? ' · <b style="color:var(--green)">entries open</b>' : '') + '</div></div>' +
       '<div class="ep">' + xv.done.length + '/' + xv.scheduled + '</div></div>';
   });
   h += sec("This event", esc(typeName(e.eventTypeId)) + ' — ' + esc(when(e)) + '. ' +
     (e.teams || []).length + ' ' + (single ? 'players' : 'teams') +
-    (v.tables.length > 1 ? ' in ' + v.tables.length + ' pools (' + counts.join(', ') + ')' : ' in a single pool') +
-    '. Everyone plays everyone in their pool: ' + v.pool.length + ' pool matches' + (e.knockout ? ' plus four knockout matches' : '') + '.');
+    (e.format === "elim"
+      ? (v.elim.length > 1 ? ' across ' + v.elim.length + ' brackets' : ' in a single bracket') + '. Single elimination — one loss and you\u2019re out: ' + v.scheduled + ' matches to a champion' + (v.elim.length > 1 ? ' per bracket' : '') + '.'
+      : (v.tables.length > 1 ? ' in ' + v.tables.length + ' pools (' + counts.join(', ') + ')' : ' in a single pool') +
+        '. Everyone plays everyone in their pool: ' + v.pool.length + ' pool matches' + (e.knockout ? ' plus four knockout matches' : '') + '.'));
   h += '<div class="secwrap">';
-  h += sec("Scoring", 'Pool games: ' + TModel.fmtLabel(e.poolFormat).toLowerCase() + '.' +
+  h += sec("Scoring", e.format === "elim"
+    ? 'Early rounds: ' + TModel.fmtLabel(e.koFormat).toLowerCase() + '. Final: ' + TModel.fmtLabel(e.finalFormat).toLowerCase() + '.' +
+      ' Traditional side-out scoring — only the serving team scores. Call the score out loud before every serve.'
+    : 'Pool games: ' + TModel.fmtLabel(e.poolFormat).toLowerCase() + '.' +
     (e.knockout ? ' Semifinals and third place: ' + TModel.fmtLabel(e.koFormat).toLowerCase() + '. Final: ' + TModel.fmtLabel(e.finalFormat).toLowerCase() + '.' : '') +
     ' Traditional side-out scoring — only the serving team scores. Call the score out loud before every serve.');
-  h += sec("Advancing", knockoutBlurb({ knockout: e.knockout, poolCount: v.tables.length }) +
+  h += sec("Advancing", e.format === "elim"
+    ? 'Single elimination — lose once and you\u2019re out. Byes go to the top seeds when a bracket isn\u2019t a clean power of two.'
+    : knockoutBlurb({ knockout: e.knockout, poolCount: v.tables.length }) +
     ' Ties break on head-to-head, then point differential, then points scored.');
   h += sec("Serving", 'Underhand only — contact below the navel, paddle head below the wrist. Drop serves allowed. The serve must clear the kitchen and land in the diagonal court; the NVZ line is a fault. No lets. Two-bounce rule: the return and the third shot must both bounce before anyone volleys.');
   h += sec("Kitchen", 'No volleying in or touching the non-volley zone line. Momentum carrying you in after a volley is a fault, even after the ball is dead. Enter freely for a bounced ball — just exit before your next volley.');

@@ -140,7 +140,8 @@ function decorate(tour, match) {
   var st = matchState(tour, match);
   return {
     id: match.id, no: match.no, stage: match.stage, stageLabel: match.stage_label || match.stage,
-    pool: match.pool, teamA: match.teamA, teamB: match.teamB, fmtKey: match.fmtKey,
+    pool: match.pool, bracket: match.bracket, roundRank: match.roundRank,
+    teamA: match.teamA, teamB: match.teamB, fmtKey: match.fmtKey,
     ready: match.ready !== false, seedA: match.seedA || "", seedB: match.seedB || "",
     games: st.games, status: st.status, winner: st.winner, loser: st.loser,
     multi: st.multi, scoreA: st.games[0] ? st.games[0].a : 0, scoreB: st.games[0] ? st.games[0].b : 0,
@@ -166,6 +167,79 @@ function standings(tour, matches, poolIndex) {
     return { pos: i + 1, team: r.team, players: r.players, w: r.w, l: r.l, pf: r.pf, pa: r.pa,
       d: r.d, diff: (r.d > 0 ? "+" : "") + r.d, rec: r.w + "–" + r.l };
   });
+}
+
+// ---- single elimination ------------------------------------------------
+function nextPow2(n) { var p = 1; while (p < n) p *= 2; return p; }
+// Standard seeding order: for n=4 -> [1,4,2,3] (i.e. 1v4, 2v3).
+function seedOrder(n) {
+  var order = [1, 2];
+  while (order.length < n) {
+    var m = order.length * 2, next = [];
+    order.forEach(function (s) { next.push(s); next.push(m + 1 - s); });
+    order = next;
+  }
+  return order;
+}
+function elimRoundLabel(matchesInRound) {
+  if (matchesInRound === 1) return "Final";
+  if (matchesInRound === 2) return "Semifinal";
+  if (matchesInRound === 4) return "Quarterfinal";
+  return "Round of " + (matchesInRound * 2);
+}
+function bracketTeams(tour, idx) {
+  var out = [];
+  (tour.teams || []).forEach(function (t, ti) { if ((t.pool || 0) === idx) out.push({ name: t.name, players: t.players || [], idx: ti }); });
+  return out;
+}
+function elimBracketBuild(tour, idx, totalBrackets) {
+  var teams = bracketTeams(tour, idx), size = teams.length;
+  if (size < 2) return { idx: idx, teams: teams, matches: [], totalRounds: 0, champion: null };
+  var bsize = nextPow2(size), order = seedOrder(bsize), totalRounds = Math.log2(bsize);
+  var slot = function (seedNum) { return teams[seedNum - 1] || null; };
+  var suffix = totalBrackets > 1 ? " · Bracket " + POOL_LETTERS[idx] : "";
+  var matches = [], winners = [], r1n = bsize / 2, w1 = [];
+  for (var k = 0; k < r1n; k++) {
+    var A = slot(order[2 * k]), B = slot(order[2 * k + 1]);
+    if (A && !B) { w1.push({ name: A.name }); continue; }
+    if (B && !A) { w1.push({ name: B.name }); continue; }
+    if (!A && !B) { w1.push(null); continue; }
+    var isFinal1 = totalRounds === 1;
+    var dec = decorate(tour, {
+      id: "B" + idx + "-R1-M" + k, stage: isFinal1 ? "final" : "elimR", roundRank: 1,
+      teamA: A.name, teamB: B.name, fmtKey: isFinal1 ? tour.finalFormat : tour.koFormat,
+      ready: true, stage_label: elimRoundLabel(r1n) + suffix
+    });
+    matches.push(dec);
+    w1.push({ name: dec.winner });
+  }
+  winners.push(w1);
+  for (var r = 2; r <= totalRounds; r++) {
+    var prev = winners[r - 2], cnt = prev.length / 2, wr = [];
+    for (var k2 = 0; k2 < cnt; k2++) {
+      var pa = prev[2 * k2], pb = prev[2 * k2 + 1];
+      var aName = pa ? pa.name : null, bName = pb ? pb.name : null;
+      var isFinal = r === totalRounds;
+      var dec2 = decorate(tour, {
+        id: "B" + idx + "-R" + r + "-M" + k2, stage: isFinal ? "final" : "elimR", roundRank: r,
+        teamA: aName || "To be decided", teamB: bName || "To be decided",
+        fmtKey: isFinal ? tour.finalFormat : tour.koFormat, ready: !!(aName && bName),
+        stage_label: elimRoundLabel(cnt) + suffix
+      });
+      matches.push(dec2);
+      wr.push({ name: dec2.winner });
+    }
+    winners.push(wr);
+  }
+  var last = winners[totalRounds - 1][0];
+  return { idx: idx, teams: teams, matches: matches, totalRounds: totalRounds, champion: last ? last.name : null };
+}
+function elimAll(tour) {
+  var n = Math.max(1, Math.min(8, parseInt(tour.poolCount, 10) || 1)), brackets = [];
+  for (var i = 0; i < n; i++) brackets.push(elimBracketBuild(tour, i, n));
+  var all = [];
+  brackets.forEach(function (b) { all = all.concat(b.matches); });
+  return { brackets: brackets, all: all };
 }
 
 // ---- knockout --------------------------------------------------------------
@@ -237,6 +311,17 @@ function knockout(tour, matches, tables) {
 
 // Everything a view needs for ONE tournament-event (teams, pools, results, formats).
 function build(tour) {
+  if (tour.format === "elim") {
+    var ex = elimAll(tour), all = ex.all;
+    return {
+      tour: tour, pool: [], tables: [], ko: null, elim: ex.brackets, all: all,
+      scheduled: all.length,
+      live: all.filter(function (m) { return m.status === "live"; }),
+      done: all.filter(function (m) { return m.status === "done"; }),
+      next: all.filter(function (m) { return m.status === "upcoming" && m.ready; }).slice(0, 4),
+      byId: (function () { var o = {}; all.forEach(function (m) { o[m.id] = m; }); return o; })()
+    };
+  }
   var raw = poolMatches(tour);
   var pool = raw.map(function (m) { return decorate(tour, m); });
   var tables = [];
@@ -258,16 +343,18 @@ function build(tour) {
 // Auto order: pool matches interleaved round-robin across events, then the
 // knockout matches stage by stage (all semis, all third places, all finals).
 function autoOrder(tour) {
-  var evs = (tour && tour.events) || [], pools = [], kos = [];
+  var evs = (tour && tour.events) || [], pools = [], kos = [], elims = [];
   evs.forEach(function (e) {
     var v = build(e);
     pools.push(v.pool.map(function (m) { return e.id + "|" + m.id; }));
     kos.push(v.ko ? ["SF1", "SF2", "BR", "FN"].map(function (id) { return e.id + "|" + id; }) : []);
+    if (v.elim) v.elim.forEach(function (b) { b.matches.forEach(function (m) { elims.push(e.id + "|" + m.id); }); });
   });
   var out = [], i, k, most = 0;
   pools.forEach(function (q) { most = Math.max(most, q.length); });
   for (i = 0; i < most; i++) for (k = 0; k < pools.length; k++) if (pools[k][i]) out.push(pools[k][i]);
   for (i = 0; i < 4; i++) for (k = 0; k < kos.length; k++) if (kos[k][i]) out.push(kos[k][i]);
+  out = out.concat(elims);
   return out;
 }
 
@@ -305,7 +392,8 @@ function master(tour) {
   // Stage priority is absolute: all pool play, then semifinals, then third
   // place, then the finals. Manual moves reorder within a stage only.
   var RANK = { pool: 0, sf: 1, bronze: 2, final: 3 };
-  rows = rows.map(function (r, i) { return { r: r, i: i, k: RANK[r.m.stage] == null ? 0 : RANK[r.m.stage] }; })
+  var rank = function (m) { return m.stage === "pool" ? 0 : (m.roundRank != null ? m.roundRank : (RANK[m.stage] == null ? 0 : RANK[m.stage])); };
+  rows = rows.map(function (r, i) { return { r: r, i: i, k: rank(r.m) }; })
     .sort(function (a, b) { return a.k - b.k || a.i - b.i; })
     .map(function (x) { return x.r; });
   // Courts are dealt out round robin down the running order, so every court
