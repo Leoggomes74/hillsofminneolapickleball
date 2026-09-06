@@ -37,6 +37,11 @@ a{color:var(--green)}a:hover{color:var(--dark)}
 .ihelp:hover{background:rgba(255,255,255,.14)}
 .hlpbox{margin:0 16px 14px;padding:14px 15px;background:#fff;border:1px solid var(--n3);border-radius:2px}
 .hlpbox.intro{margin-top:16px;background:var(--mint);border-color:var(--green);font-size:13px;line-height:1.5;color:var(--ink)}
+.byebox{margin:0 16px 12px;padding:12px 13px;background:#fdf4e6;border:1px solid var(--gold)}
+.byeh{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);margin-bottom:8px}
+.byerow{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.byebtn{border:2px solid var(--n5);background:#fff;color:var(--n7);font-family:var(--f);font-size:11px;font-weight:800;padding:6px 10px;min-height:36px}
+.byebtn.on{background:var(--gold);border-color:var(--gold);color:var(--ink)}
 .hlpbox p{margin:0 0 8px;font-size:13px;line-height:1.55;color:var(--ink)}
 .hlpbox p:last-child{margin-bottom:0}
 .hlplist{margin:0 0 8px;padding-left:18px;font-size:13px;line-height:1.55}
@@ -415,8 +420,8 @@ html,body{background:#fff}
 .gwrap{grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:0 2px;background:var(--div)}
 .gblock{background:var(--bg)}
 .kowrap{grid-template-columns:1fr 1fr;gap:0}
-.kowrap .sf{margin-left:22px;margin-right:0}
-.kowrap .sf+.sf{margin-left:11px;margin-right:22px}
+.kowrap .sf:nth-child(odd){margin-left:22px;margin-right:11px}
+.kowrap .sf:nth-child(even){margin-left:11px;margin-right:22px}
 .secwrap{display:block;columns:2;column-gap:0;column-rule:2px solid var(--div);background:transparent}
 .secwrap .sec{background:var(--bg);border-bottom:2px solid var(--div);break-inside:avoid}
 .nav>div{max-width:760px}
@@ -437,8 +442,8 @@ html,body{background:#fff}
 .tlist{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
 .gwrap{grid-template-columns:repeat(auto-fit,minmax(380px,1fr))}
 .kpi{grid-template-columns:repeat(4,1fr)}
-.kowrap .sf{margin-left:28px}
-.kowrap .sf+.sf{margin-left:14px;margin-right:28px}
+.kowrap .sf:nth-child(odd){margin-left:28px;margin-right:14px}
+.kowrap .sf:nth-child(even){margin-left:14px;margin-right:28px}
 .nav>div{max-width:1120px}
 .psheet{padding:0 28px 28px}
 .prow{grid-template-columns:32px 1fr 140px}

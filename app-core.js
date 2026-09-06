@@ -241,23 +241,48 @@ function elimCore(tour, teams, idPrefix, stopRound, trueFinalAtStop, labelFn, ra
 // One bracket's internal elimination, stopping once it's down to `advance`
 // qualifiers (advance=1 plays the bracket to its own champion).
 function elimBracketBuild(tour, idx, totalBrackets, advance) {
-  var teams = bracketTeams(tour, idx);
-  if (teams.length < 2) return { idx: idx, teams: teams, matches: [], qualifiers: teams.map(function (t) { return { name: t.name }; }), champion: null, rounds: 0 };
-  var bsize = nextPow2(teams.length), totalRounds = Math.log2(bsize);
+  var allTeams = bracketTeams(tour, idx);
+  if (allTeams.length < 2) return { idx: idx, teams: allTeams, matches: [], qualifiers: allTeams.map(function (t) { return { name: t.name }; }), champion: null, rounds: 0 };
+  var byeNames = (tour.byeTeams || []).filter(Boolean);
+  var byeSet = allTeams.filter(function (t) { return byeNames.indexOf(t.name) !== -1; });
+  var playSet = allTeams.filter(function (t) { return byeNames.indexOf(t.name) === -1; });
+  var suffix = totalBrackets > 1 ? " · Bracket " + POOL_LETTERS[idx] : "";
+
+  if (byeSet.length && playSet.length >= 2) {
+    // Manually-assigned byes skip round 1 entirely; everyone else plays it
+    // to fill the remaining slots one round later.
+    var r1 = elimCore(tour, playSet, "B" + idx + "-", 1, false,
+      function (cnt) { return "Round of " + (cnt * 2) + suffix; }, 0, true);
+    var nextInput = byeSet.map(function (t) { return { name: t.name }; }).concat(r1.winners);
+    var bsize2 = nextPow2(nextInput.length), totalRounds2 = Math.log2(bsize2);
+    var adv2 = Math.max(1, Math.min(advance, bsize2)), advPow2 = 1;
+    while (advPow2 * 2 <= adv2) advPow2 *= 2;
+    if (advPow2 >= bsize2) {
+      var passThrough2 = [];
+      for (var s2 = 1; s2 <= bsize2; s2++) passThrough2.push(nextInput[s2 - 1] || null);
+      return { idx: idx, teams: allTeams, matches: r1.matches, qualifiers: passThrough2, champion: null, rounds: 1 };
+    }
+    var stopRound2 = totalRounds2 - Math.log2(advPow2), trueFinal2 = advPow2 === 1;
+    var stage2 = elimCore(tour, nextInput, "B" + idx + "-Q", stopRound2, trueFinal2,
+      function (cnt) { return (trueFinal2 ? elimRoundLabel(cnt) : "Round of " + (cnt * 2)) + suffix; }, 1, true);
+    var champion2 = trueFinal2 && stage2.winners[0] ? stage2.winners[0].name : null;
+    return { idx: idx, teams: allTeams, matches: r1.matches.concat(stage2.matches), qualifiers: stage2.winners, champion: champion2, rounds: 1 + stage2.rounds };
+  }
+
+  var bsize = nextPow2(allTeams.length), totalRounds = Math.log2(bsize);
   var adv = Math.max(1, Math.min(advance, bsize)), advPow = 1;
   while (advPow * 2 <= adv) advPow *= 2;
   if (advPow >= bsize) {
     var passThrough = [];
-    for (var s = 1; s <= bsize; s++) passThrough.push(teams[s - 1] ? { name: teams[s - 1].name } : null);
-    return { idx: idx, teams: teams, matches: [], qualifiers: passThrough, champion: null, rounds: 0 };
+    for (var s = 1; s <= bsize; s++) passThrough.push(allTeams[s - 1] ? { name: allTeams[s - 1].name } : null);
+    return { idx: idx, teams: allTeams, matches: [], qualifiers: passThrough, champion: null, rounds: 0 };
   }
   var stopRound = totalRounds - Math.log2(advPow);
-  var suffix = totalBrackets > 1 ? " · Bracket " + POOL_LETTERS[idx] : "";
   var trueFinal = advPow === 1;
-  var stage = elimCore(tour, teams, "B" + idx + "-", stopRound, trueFinal,
+  var stage = elimCore(tour, allTeams, "B" + idx + "-", stopRound, trueFinal,
     function (cnt) { return (trueFinal ? elimRoundLabel(cnt) : "Round of " + (cnt * 2)) + suffix; }, 0, true);
   var champion = trueFinal && stage.winners[0] ? stage.winners[0].name : null;
-  return { idx: idx, teams: teams, matches: stage.matches, qualifiers: stage.winners, champion: champion, rounds: stage.rounds };
+  return { idx: idx, teams: allTeams, matches: stage.matches, qualifiers: stage.winners, champion: champion, rounds: stage.rounds };
 }
 // All brackets, plus (when more than one team advances per bracket) a
 // combined cross-bracket knockout seeded from each bracket's qualifiers.

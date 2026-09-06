@@ -731,7 +731,18 @@ function tabElim(t, e, v) {
   var any = false;
   v.elim.forEach(function (b, bi) {
     if (v.elim.length > 1) h += '<div class="lbl' + (bi ? ' rule' : '') + '">Bracket ' + TModel.POOL_LETTERS[bi] + '</div>';
-    if (!b.matches.length) { h += '<div class="empty small">Waiting for entries in this bracket.</div>'; return; }
+    if (!t.locked && b.teams.length > 2) {
+      var byes = e.byeTeams || [];
+      h += '<div class="byebox"><div class="byeh">Give a bye to the next round</div>' +
+        '<div class="byerow">' + b.teams.map(function (x) {
+          return '<button class="byebtn' + (byes.indexOf(x.name) !== -1 ? ' on' : '') + '" data-act="togglebye" data-val="' + e.id + '|' + x.name + '">' + esc(x.name) + '</button>';
+        }).join('') + '</div>' +
+        '<div class="fnote">Tap a team to send it straight to the round after this one, skipping its own game here. Everyone else plays as normal to fill the rest.</div></div>';
+    }
+    if (!b.matches.length) {
+      h += b.teams.length ? '<div class="empty small">' + b.teams.length + ' ' + (b.teams.length === 1 ? 'entry' : 'entries') + ' \u2014 all advance directly to the combined bracket.</div>' : '<div class="empty small">Waiting for entries in this bracket.</div>';
+      return;
+    }
     any = true;
     var byRound = {};
     b.matches.forEach(function (m) { (byRound[m.roundRank] = byRound[m.roundRank] || []).push(m); });

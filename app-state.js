@@ -482,6 +482,18 @@ document.addEventListener("click", function (e) {
   if (act === "courtclose") { S.courtPick = null; return render(); }
   if (act === "qualpick") { S.qualPick = val; return render(); }
   if (act === "qualclose") { S.qualPick = null; return render(); }
+  if (act === "togglebye") {
+    var bParts = val.split("|"), bEid = bParts[0], bTeam = bParts[1];
+    var tb = tour(); if (!tb) return;
+    var eb = (tb.events || []).filter(function (x) { return x.id === bEid; })[0]; if (!eb) return;
+    return needPin(function () {
+      eb.byeTeams = eb.byeTeams || [];
+      var bi = eb.byeTeams.indexOf(bTeam);
+      if (bi === -1) eb.byeTeams.push(bTeam); else eb.byeTeams.splice(bi, 1);
+      cacheDb(); render();
+      post({ action: "toggleBye", tournamentId: tb.id, eventId: bEid, team: bTeam }, "Updated");
+    });
+  }
   if (act === "setqual") {
     var qParts = val.split("@@"), qEid = qParts[0], qSlot = qParts[1], qTeam = qParts[2];
     var tq = tour(); if (!tq) return;
