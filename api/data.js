@@ -196,6 +196,7 @@ function sanitizeEvent(body, existing, requireTeamName) {
     finalFormat: clean(body.finalFormat, 12) || "to11win2",
     teams,
     waitlist: existing && Array.isArray(existing.waitlist) ? existing.waitlist : [],
+    qualOverride: existing && existing.qualOverride && typeof existing.qualOverride === "object" ? existing.qualOverride : {},
     results: existing ? existing.results || {} : {}
   };
 }
@@ -473,6 +474,15 @@ export default async function (req, res) {
         if (Number.isInteger(i) && i >= 0 && i < 12) out[clean(k, 60)] = i;
       });
       cur.courtMap = out;
+    } else if (a === "setQual") {
+      const cur = find(body.tournamentId);
+      if (!cur) return res.status(404).json({ error: "no such tournament" });
+      const ev = (cur.events || []).find(e => e.id === body.eventId);
+      if (!ev) return res.status(404).json({ error: "no such event" });
+      ev.qualOverride = ev.qualOverride && typeof ev.qualOverride === "object" ? ev.qualOverride : {};
+      const slot = clean(body.slot, 20), team = clean(body.team, 40);
+      if (!slot) return res.status(400).json({ error: "no such slot" });
+      if (!team) delete ev.qualOverride[slot]; else ev.qualOverride[slot] = team;
     } else if (a === "setDefault") {
       db.defaultId = body.tournamentId || null;
     } else {
