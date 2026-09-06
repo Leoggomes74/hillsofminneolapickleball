@@ -186,6 +186,7 @@ function sanitizeEvent(body, existing, requireTeamName) {
     date: clean(body.date, 10),
     time: clean(body.time, 5),
     format: body.format === "elim" ? "elim" : "pools",
+    advancePerBracket: Math.max(1, Math.min(16, parseInt(body.advancePerBracket, 10) || 1)),
     regOpen: body.regOpen !== false,
     maxTeams: Math.max(0, Math.min(32, parseInt(body.maxTeams, 10) || 0)),
     poolCount: Math.max(1, Math.min(8, parseInt(body.poolCount, 10) || 1)),
