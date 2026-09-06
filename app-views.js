@@ -49,7 +49,7 @@ function viewHome() {
       if (v.live.length) anyLive = true;
     });
     var status = t.locked ? "Locked" : (done === 0 ? "Not started" : (done >= sched ? "Complete" : "In progress"));
-    var regOn = !t.locked && evs.some(function (e) { return e.regOpen !== false; });
+    var regOn = !t.locked && t.regActive !== false && evs.some(function (e) { return e.regOpen !== false; });
     h += '<div class="tcard">' +
       '<button class="tmain" data-act="open" data-val="' + t.id + '">' +
         '<div class="trow"><div class="tname">' + esc(t.name) + '</div>' +
@@ -154,6 +154,16 @@ function viewForm() {
     h += '<div class="fsec"><label>Tournament director</label><input type="text" data-field="director" value="' + esc(f.director) + '" placeholder="Who runs the event"></div>';
     h += '<div class="fsec"><label>Registration fee</label><input type="text" data-field="fee" value="' + esc(f.fee) + '" placeholder="e.g. $40 per team" maxlength="40">' +
       '<div class="fnote">Shown on the Info tab and to anyone registering. Leave blank if the event is free.</div></div>';
+    h += '<div class="fsec"><label>Registration status</label>' +
+      '<button type="button" class="regtoggle ' + (f.regActive ? 'on' : 'off') + '" data-act="toggleregactive">' +
+      (f.regActive ? '● Active — players can register' : '○ Inactive — registration closed') + '</button>' +
+      '<div class="fnote">When inactive, nobody can register or join the waitlist for any event in this tournament, even if spots remain.</div></div>';
+    h += '<div class="fsec"><label>Entry naming</label>' +
+      '<button type="button" class="regtoggle ' + (f.requireTeamName ? 'on' : 'off') + '" data-act="togglereqname">' +
+      (f.requireTeamName ? '● Team name required' : '○ Players only — no team name') + '</button>' +
+      '<div class="fnote">' + (f.requireTeamName
+        ? 'Entrants pick a team/entry name plus their player name(s).'
+        : 'Entrants enter only player name(s); their entry is listed by player name everywhere in the app.') + ' Applies to every event in this tournament.</div></div>';
     h += '<div class="fsec two"><div><label>Start date</label><input type="date" data-field="date" value="' + esc(f.date) + '"></div>' +
       '<div><label>Start time</label><input type="time" data-field="time" value="' + esc(f.time) + '"></div></div>';
     h += '<div class="fsec"><label>Number of courts</label><input type="number" min="0" max="12" data-field="courtCount" value="' + esc(String(f.courtCount || 0)) + '">' +
@@ -215,7 +225,7 @@ function viewForm() {
       e.teams.forEach(function (t, i) {
         h += '<div class="trow2"><div class="tnum">' + (i + 1) + (t.registered ? '<b class="regdot" title="Self-registered">●</b>' : '') + '</div>' +
           '<div class="tfields">' +
-            '<input type="text" data-team="' + ei + ':' + i + ':name" value="' + esc(t.name) + '" placeholder="' + (single ? 'Entry name' : 'Team name') + '">' +
+            (f.requireTeamName ? '<input type="text" data-team="' + ei + ':' + i + ':name" value="' + esc(t.name) + '" placeholder="' + (single ? 'Entry name' : 'Team name') + '">' : '') +
             '<div class="pgrid' + (single ? ' one' : '') + '">' +
               '<input type="text" data-team="' + ei + ':' + i + ':p:0" value="' + esc(t.players[0]) + '" placeholder="' + (single ? 'Player' : 'Player 1') + '">' +
               (single ? '' : '<input type="text" data-team="' + ei + ':' + i + ':p:1" value="' + esc(t.players[1]) + '" placeholder="Player 2">') +
@@ -628,23 +638,24 @@ function koCard(t, m, cls, evTeams) {
 function tabTeams(t, e, v) {
   var single = typeSingles(e.eventTypeId);
   var n = (e.teams || []).length, cap = e.maxTeams || 0;
-  var open = e.regOpen !== false && !t.locked && (!cap || n < cap);
+  var open = e.regOpen !== false && !t.locked && t.regActive !== false && (!cap || n < cap);
   var h = '<div class="bar"><h2>' + (single ? 'Players' : 'Teams') + '</h2><div class="meta">' + n + (cap ? ' of ' + cap : '') + ' · ' + e.poolCount + ' pool' + (e.poolCount > 1 ? 's' : '') + '</div></div>';
+  if (t.regActive === false) h += '<div class="empty small">Registration is currently closed for this tournament.</div>';
 
   if (open) {
     h += '<div class="regbox"><div class="regh">Register for ' + esc(typeName(e.eventTypeId)) + '</div>' +
       '<div class="regsub">' + esc(when(e)) + ' · no passcode needed' + (cap ? ' · ' + (cap - n) + ' place' + (cap - n === 1 ? '' : 's') + ' left' : '') + '</div>' +
       (t.fee ? '<div class="regfee">Entry fee · <b>' + esc(t.fee) + '</b></div>' : '') +
-      '<div class="fsec"><label>' + (single ? 'Entry name' : 'Team name') + '</label><input type="text" data-reg="team" value="' + esc(S.reg.team) + '" placeholder="' + (single ? 'How should we list you?' : 'What is your team called?') + '" maxlength="40"></div>' +
+      (t.requireTeamName === false ? '' : '<div class="fsec"><label>' + (single ? 'Entry name' : 'Team name') + '</label><input type="text" data-reg="team" value="' + esc(S.reg.team) + '" placeholder="' + (single ? 'How should we list you?' : 'What is your team called?') + '" maxlength="40"></div>') +
       '<div class="fsec"><label>Your name</label><input type="text" data-reg="p1" value="' + esc(S.reg.p1) + '" placeholder="First and last name" maxlength="40"></div>' +
       (single ? '' : '<div class="fsec"><label>Partner name</label><input type="text" data-reg="p2" value="' + esc(S.reg.p2) + '" placeholder="First and last name" maxlength="40"></div>') +
       '<button class="fbtn wide"' + (S.regBusy ? ' disabled' : '') + ' data-act="register">' + (S.regBusy ? 'Registering\u2026' : 'Register') + '</button>' +
       '<div class="fnote">You go straight into the draw and the emptiest pool.' + (t.fee ? ' The ' + esc(t.fee) + ' entry fee is payable to the Tournament Organization.' : '') + ' Organizers can correct any detail afterwards.</div></div>';
-  } else if (e.regOpen !== false && cap && n >= cap && !t.locked) {
+  } else if (e.regOpen !== false && cap && n >= cap && !t.locked && t.regActive !== false) {
     var wq = e.waitlist || [];
     h += '<div class="regbox wlbox"><div class="regh">Waitlist · ' + esc(typeName(e.eventTypeId)) + '</div>' +
       '<div class="regsub">Event full · all ' + cap + ' spots taken · ' + wq.length + ' waiting</div>' +
-      '<div class="fsec"><label>' + (single ? 'Entry name' : 'Team name') + '</label><input type="text" data-wl="team" value="' + esc(S.wl.team) + '" placeholder="' + (single ? 'How should we list you?' : 'What is your team called?') + '" maxlength="40"></div>' +
+      (t.requireTeamName === false ? '' : '<div class="fsec"><label>' + (single ? 'Entry name' : 'Team name') + '</label><input type="text" data-wl="team" value="' + esc(S.wl.team) + '" placeholder="' + (single ? 'How should we list you?' : 'What is your team called?') + '" maxlength="40"></div>') +
       '<div class="fsec"><label>Your name</label><input type="text" data-wl="p1" value="' + esc(S.wl.p1) + '" placeholder="First and last name" maxlength="40"></div>' +
       (single ? '' : '<div class="fsec"><label>Partner name</label><input type="text" data-wl="p2" value="' + esc(S.wl.p2) + '" placeholder="First and last name" maxlength="40"></div>') +
       '<button class="fbtn wide"' + (S.wlBusy ? ' disabled' : '') + ' data-act="joinwait">' + (S.wlBusy ? 'Joining\u2026' : 'Join the waitlist') + '</button>' +
@@ -860,7 +871,7 @@ function teamSheet() {
   }
   return '<div class="back2" data-act="teamclose" data-back="1"><div class="sheet">' +
     '<div class="h"><b>Edit entry · ' + esc(typeName(e.eventTypeId)) + '</b><button data-act="teamclose">CLOSE</button></div>' +
-    '<div class="fsec"><label>' + (single ? 'Entry name' : 'Team name') + '</label><input type="text" data-tform="name" value="' + esc(d.name) + '" maxlength="40"></div>' +
+    (t.requireTeamName === false ? '' : '<div class="fsec"><label>' + (single ? 'Entry name' : 'Team name') + '</label><input type="text" data-tform="name" value="' + esc(d.name) + '" maxlength="40"></div>') +
     '<div class="fsec"><label>' + (single ? 'Player' : 'Player 1') + '</label><input type="text" data-tform="p1" value="' + esc(d.p1) + '" maxlength="40"></div>' +
     (single ? '' : '<div class="fsec"><label>Player 2</label><input type="text" data-tform="p2" value="' + esc(d.p2) + '" maxlength="40"></div>') +
     pools +

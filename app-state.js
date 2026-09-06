@@ -219,6 +219,7 @@ function blankEvent(typeId) {
 function blankForm() {
   var f = {
     mode: "new", id: null, name: "", director: "", fee: "",
+    regActive: true, requireTeamName: true,
     courtCount: 2, courtNames: ["Court 1", "Court 2"],
     date: new Date().toISOString().slice(0, 10), time: "08:00",
     events: [blankEvent()], step: 1, error: ""
@@ -265,6 +266,7 @@ function openEdit(id) {
     if (!t) return;
     S.form = {
       mode: "edit", id: t.id, name: t.name, director: t.director || "", fee: t.fee || "",
+      regActive: t.regActive !== false, requireTeamName: t.requireTeamName !== false,
       courtCount: t.courtCount || 0, courtNames: (TModel.courtsOf(t) || []).slice(),
       date: t.date || "", time: t.time || "",
       events: evsOf(t).map(function (e) {
@@ -320,6 +322,7 @@ function submitForm() {
   if (err) { f.error = err; render(); return; }
   var payload = {
     name: f.name, director: String(f.director || "").trim(), fee: String(f.fee || "").trim(), date: f.date, time: f.time,
+    regActive: f.regActive !== false, requireTeamName: f.requireTeamName !== false,
     courtCount: parseInt(f.courtCount, 10) || 0,
     courtNames: (f.courtNames || []).map(function (n) { return String(n || "").trim(); }),
     events: f.events.map(function (e) {
@@ -418,6 +421,8 @@ document.addEventListener("click", function (e) {
   if (act === "invite") { if (val) S.tourId = val; S.screen = "invite"; S.menu = null; window.scrollTo(0, 0); return render(); }
   if (act === "backevent") { S.screen = "event"; window.scrollTo(0, 0); return render(); }
   if (act === "schedall") { S.schedAll = val === "1"; window.scrollTo(0, 0); return render(); }
+  if (act === "toggleregactive") { S.form.regActive = !S.form.regActive; return render(); }
+  if (act === "togglereqname") { S.form.requireTeamName = !S.form.requireTeamName; return render(); }
   if (act === "schedqreset") { S.schedQ = ""; return render(); }
   if (act === "schedqapply") {
     var inp = document.querySelector('input[data-field="schedQ"]');
@@ -431,9 +436,9 @@ document.addEventListener("click", function (e) {
   if (act === "invshare") return shareInvite();
   if (act === "joinwait") {
     var tw = tour(), ew = ev(); if (!tw || !ew) return;
-    var sw = typeSingles(ew.eventTypeId);
+    var sw = typeSingles(ew.eventTypeId), needNameW = tw.requireTeamName !== false;
     var wt = String(S.wl.team || "").trim(), w1 = String(S.wl.p1 || "").trim(), w2 = String(S.wl.p2 || "").trim();
-    if (!wt || !w1 || (!sw && !w2)) { toast(sw ? "Entry name and player needed" : "Team, your name and partner needed"); return; }
+    if ((needNameW && !wt) || !w1 || (!sw && !w2)) { toast(sw ? "Player name needed" : "Your name and partner needed"); return; }
     S.wlBusy = true; render();
     post({ action: "waitlist", tournamentId: tw.id, eventId: ew.id, team: wt, p1: w1, p2: w2 }).then(function (d) {
       S.wlBusy = false;
@@ -568,11 +573,11 @@ document.addEventListener("click", function (e) {
   if (act === "teampool") { S.teamEdit.pool = +val; return render(); }
   if (act === "teamsave") {
     var ts = tour(), es = ev(), d = S.teamEdit; if (!ts || !es || !d) return;
-    var sg = typeSingles(es.eventTypeId);
-    if (!String(d.name).trim() || !String(d.p1).trim() || (!sg && !String(d.p2).trim())) { toast("Fill every field"); return; }
+    var sg = typeSingles(es.eventTypeId), needN = ts.requireTeamName !== false;
+    if ((needN && !String(d.name).trim()) || !String(d.p1).trim() || (!sg && !String(d.p2).trim())) { toast("Fill every field"); return; }
     S.teamEdit = null; render();
     post({ action: "updateTeam", tournamentId: ts.id, eventId: es.id, index: d.index,
-      name: d.name.trim(), p1: d.p1.trim(), p2: d.p2.trim(), pool: d.pool }, "Entry updated");
+      name: String(d.name || "").trim(), p1: d.p1.trim(), p2: d.p2.trim(), pool: d.pool }, "Entry updated");
     return;
   }
   if (act === "teamaskdel") { S.teamEdit.confirm = true; return render(); }
@@ -585,9 +590,9 @@ document.addEventListener("click", function (e) {
 
   if (act === "register") {
     var tr = tour(), er = ev(); if (!tr || !er) return;
-    var sng = typeSingles(er.eventTypeId);
+    var sng = typeSingles(er.eventTypeId), needName = tr.requireTeamName !== false;
     var team = String(S.reg.team || "").trim(), p1 = String(S.reg.p1 || "").trim(), p2 = String(S.reg.p2 || "").trim();
-    if (!team || !p1 || (!sng && !p2)) { toast(sng ? "Entry name and player needed" : "Team, your name and partner needed"); return; }
+    if ((needName && !team) || !p1 || (!sng && !p2)) { toast(sng ? "Player name needed" + (needName ? " (and entry name)" : "") : "Your name and partner needed" + (needName ? " (and team name)" : "")); return; }
     S.regBusy = true; render();
     post({ action: "register", tournamentId: tr.id, eventId: er.id, team: team, p1: p1, p2: p2 }).then(function (d) {
       S.regBusy = false;
