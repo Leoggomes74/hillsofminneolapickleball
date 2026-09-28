@@ -501,7 +501,11 @@ document.addEventListener("click", function (e) {
     var eq = (tq.events || []).filter(function (x) { return x.id === qEid; })[0]; if (!eq) return;
     return needPin(function () {
       eq.qualOverride = eq.qualOverride || {};
-      if (qTeam === "auto") delete eq.qualOverride[qSlot]; else eq.qualOverride[qSlot] = qTeam;
+      if (qTeam === "auto") delete eq.qualOverride[qSlot];
+      else {
+        Object.keys(eq.qualOverride).forEach(function (k) { if (eq.qualOverride[k] === qTeam) delete eq.qualOverride[k]; });
+        eq.qualOverride[qSlot] = qTeam;
+      }
       S.qualPick = null; cacheDb(); render();
       post({ action: "setQual", tournamentId: tq.id, eventId: qEid, slot: qSlot, team: qTeam === "auto" ? "" : qTeam }, "Updated");
     });

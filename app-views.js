@@ -711,17 +711,31 @@ function qualSheet() {
   var bIdx = bRaw === "all" ? null : +bRaw;
   var teams = bIdx == null ? (e.teams || []) : (e.teams || []).filter(function (x) { return (x.pool || 0) === bIdx; });
   var cur = (e.qualOverride || {})[slotKey];
-  var btns = teams.map(function (x) {
-    return '<button class="cpick' + (cur === x.name ? ' on' : '') + '" data-act="setqual" data-val="' + eid + '@@' + slotKey + '@@' + x.name + '">' + esc(x.name) + '</button>';
-  }).join('');
-  var title = bIdx == null ? "Assign \u00b7 Semifinal" : "Assign \u00b7 Bracket " + TModel.POOL_LETTERS[bIdx];
+  var pick = function (val, label) {
+    return '<button class="cpick' + (cur === val ? ' on' : '') + '" data-act="setqual" data-val="' + eid + '@@' + slotKey + '@@' + esc(val) + '">' + esc(label) + '</button>';
+  };
+  var gameBtns = "";
+  if (bIdx != null) {
+    var bv = TModel.build(e);
+    (bv.elim || []).forEach(function (b) {
+      if (!b.matches.length) return;
+      var maxRk = Math.max.apply(null, b.matches.map(function (m) { return m.roundRank; }));
+      b.matches.filter(function (m) { return m.roundRank === maxRk; }).forEach(function (m) {
+        gameBtns += pick('@W:' + m.id, 'Winner Game #' + m.no + ' \u00b7 ' + (m.winner || (m.teamA + ' vs ' + m.teamB)));
+      });
+    });
+    teams = e.teams || [];
+  }
+  var btns = teams.map(function (x) { return pick(x.name, x.name); }).join('');
+  var title = bIdx == null ? "Assign \u00b7 Semifinal" : "Assign \u00b7 Quarterfinal slot";
   return '<div class="back2" data-act="qualclose" data-back="1"><div class="sheet">' +
     '<div class="h"><b>' + title + '</b><button data-act="qualclose">CLOSE</button></div>' +
-    '<div class="msg">Pick which ' + (bIdx == null ? "entry" : "team from this bracket") + ' fills this slot.</div>' +
-    '<div class="fsec"><div class="cpicks">' + (btns || '<div class="empty small">No entries yet.</div>') + '</div>' +
+    '<div class="msg">' + (bIdx == null ? 'Pick which entry fills this slot.' : 'Pick the earlier game whose winner plays here, or place a team directly (e.g. a bye).') + '</div>' +
+    (gameBtns ? '<div class="fsec"><div class="lbl" style="padding:0 0 6px">Winner of game</div><div class="cpicks">' + gameBtns + '</div></div>' : '') +
+    '<div class="fsec">' + (gameBtns ? '<div class="lbl" style="padding:0 0 6px">Team</div>' : '') + '<div class="cpicks">' + (btns || '<div class="empty small">No entries yet.</div>') + '</div>' +
     '<div class="fnote">' + (cur
-      ? 'Manually set. Reset to let the app fill it automatically' + (bIdx == null ? '.' : ' once this bracket finishes.')
-      : 'Not set \u2014 filled automatically' + (bIdx == null ? ' from pool standings.' : ' once Bracket ' + TModel.POOL_LETTERS[bIdx] + ' finishes its games.')) + '</div></div>' +
+      ? 'Manually set. Reset to let the app fill it automatically.'
+      : 'Not set \u2014 filled automatically' + (bIdx == null ? ' from pool standings.' : ' once the brackets finish their games.')) + '</div></div>' +
     (cur ? '<button class="rm" data-act="setqual" data-val="' + eid + '@@' + slotKey + '@@auto">Back to automatic</button>' : '') +
     '<div class="acts"><button class="lv" data-act="qualclose">Close</button></div></div></div>';
 }
