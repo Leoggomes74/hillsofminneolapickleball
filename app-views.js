@@ -759,13 +759,13 @@ function elimTree(t, e, brackets, combined) {
   brackets.forEach(function (b, bi) {
     if (!b.matches.length) return;
     var byRound = {};
-    b.matches.forEach(function (m) { (byRound[m.roundRank] = byRound[m.roundRank] || []).push(m); });
+    b.matches.slice().sort(byNo).forEach(function (m) { (byRound[m.roundRank] = byRound[m.roundRank] || []).push(m); });
     var rounds = Object.keys(byRound).map(Number).sort(function (x, y) { return x - y; }).map(function (rk) { return { title: byRound[rk][0].stageLabel.split(' \u00b7 ')[0], matches: byRound[rk], inB: rk > 1 ? { bi: bi } : null }; });
     sections.push({ label: brackets.length > 1 ? 'Bracket ' + TModel.POOL_LETTERS[bi] : null, rounds: rounds });
   });
   if (combined) {
     var byRoundC = {};
-    combined.matches.forEach(function (m) { (byRoundC[m.roundRank] = byRoundC[m.roundRank] || []).push(m); });
+    combined.matches.slice().sort(byNo).forEach(function (m) { (byRoundC[m.roundRank] = byRoundC[m.roundRank] || []).push(m); });
     var roundsC = Object.keys(byRoundC).map(Number).sort(function (x, y) { return x - y; }).map(function (rk) { return { title: byRoundC[rk][0].stageLabel, matches: byRoundC[rk], assign: rk === combined.firstRoundRank ? combined.bracketCount : 0 }; });
     sections.push({ label: 'Combined bracket', rounds: roundsC });
   }
@@ -774,6 +774,7 @@ function elimTree(t, e, brackets, combined) {
 }
 // Tidy-tree layout: each game sits level with the games that feed it, so
 // byes and manual slot assignments still read as a proper bracket.
+function byNo(a, b) { return (a.no || 0) - (b.no || 0); }
 function treeLayout(t, e, rounds) {
   var editing = !t.locked && rounds.some(function (r) { return r.assign || r.inB; });
   var W = 190, GAP = 34, H = editing ? 166 : 78, SLOT = H + 14, TOP = 26;
@@ -786,7 +787,7 @@ function treeLayout(t, e, rounds) {
       feeders[m.id] = ['A', 'B'].map(function (s) {
         var src = m['src' + s], nm = m['team' + s];
         return prev.filter(function (p) { return src ? p.id === src : (p.winner && p.winner === nm); })[0] || null;
-      }).filter(Boolean);
+      }).filter(Boolean).sort(byNo);
     });
   });
   var y = {}, leaf = 0, fed = {};
@@ -866,7 +867,7 @@ function tabElim(t, e, v) {
     }
     any = true;
     var byRound = {};
-    b.matches.forEach(function (m) { (byRound[m.roundRank] = byRound[m.roundRank] || []).push(m); });
+    b.matches.slice().sort(byNo).forEach(function (m) { (byRound[m.roundRank] = byRound[m.roundRank] || []).push(m); });
     Object.keys(byRound).map(Number).sort(function (x, y) { return x - y; }).forEach(function (rk) {
       h += '<div class="lbl rule">' + esc(byRound[rk][0].stageLabel.split(' \u00b7 ')[0]) + '</div>';
       h += '<div class="kowrap">' + byRound[rk].map(function (m) { return rk > 1 ? qualCard(t, e, m, 1, { bi: bi }) : koCard(t, m, m.stage === "final" ? "fin" : null, e.teams); }).join('') + '</div>';
@@ -877,7 +878,7 @@ function tabElim(t, e, v) {
     any = true;
     h += '<div class="lbl rule" style="margin-top:4px">Combined bracket</div>';
     var byRound2 = {};
-    v.combined.matches.forEach(function (m) { (byRound2[m.roundRank] = byRound2[m.roundRank] || []).push(m); });
+    v.combined.matches.slice().sort(byNo).forEach(function (m) { (byRound2[m.roundRank] = byRound2[m.roundRank] || []).push(m); });
     Object.keys(byRound2).map(Number).sort(function (x, y) { return x - y; }).forEach(function (rk) {
       h += '<div class="lbl rule">' + esc(byRound2[rk][0].stageLabel) + '</div>';
       h += '<div class="kowrap">' + byRound2[rk].map(function (m) {
