@@ -197,15 +197,44 @@ function bracketTeams(tour, idx) {
 // null = bye/unfilled slot). Stops after `stopRound` rounds (null = play to
 // the end); only the very last round played is a "final" match when
 // trueFinalAtStop is set (used by the combined cross-bracket stage).
+// Admin slot overrides inside a bracket, keyed "<matchId>-A|B": value is a
+// team name or "@W:<matchId>" (winner of that earlier game). Untouched slots
+// keep their own entrant; any entrant displaced by an override fills the
+// first freed slot, so nobody is dropped or doubled.
+function ovSlots(tour, idPrefix, r, pairs) {
+  var ov = tour.qualOverride || {}, flat = [], out = [], claimed = [], hasOv = false;
+  pairs.forEach(function (p) { flat.push(p[0]); flat.push(p[1]); });
+  var keyOf = function (i) { return idPrefix + "R" + r + "-M" + Math.floor(i / 2) + "-" + (i % 2 ? "B" : "A"); };
+  for (var i = 0; i < flat.length; i++) {
+    var v = ov[keyOf(i)]; if (!v) continue;
+    var isW = v.indexOf("@W:") === 0, hit = -1;
+    for (var j = 0; j < flat.length; j++) {
+      var f = flat[j]; if (!f || claimed[j]) continue;
+      if (isW ? f.src === v.slice(3) : f.name === v) { hit = j; break; }
+    }
+    if (hit !== -1) { out[i] = flat[hit]; claimed[hit] = true; hasOv = true; }
+    else if (!isW) { out[i] = { name: v }; hasOv = true; }
+  }
+  if (!hasOv) return pairs;
+  for (var a = 0; a < flat.length; a++) if (out[a] === undefined && flat[a] && !claimed[a]) { out[a] = flat[a]; claimed[a] = true; }
+  var left = [];
+  for (var b = 0; b < flat.length; b++) if (flat[b] && !claimed[b]) left.push(flat[b]);
+  for (var c = 0; c < flat.length; c++) if (out[c] === undefined) out[c] = left.length ? left.shift() : null;
+  var res = [];
+  for (var d = 0; d < out.length; d += 2) res.push([out[d], out[d + 1]]);
+  return res;
+}
 function elimCore(tour, teams, idPrefix, stopRound, trueFinalAtStop, labelFn, rankOffset, allowByes) {
   var n = teams.length;
   if (n < 2) return { matches: [], winners: teams.slice(), rounds: 0 };
   var bsize = nextPow2(n), order = seedOrder(bsize), totalRounds = Math.log2(bsize);
   var effStop = stopRound == null ? totalRounds : Math.min(stopRound, totalRounds);
   var slot = function (seedNum) { return teams[seedNum - 1] || null; };
-  var matches = [], winners = [], r1n = bsize / 2, w1 = [];
+  var matches = [], winners = [], r1n = bsize / 2, w1 = [], pairs1 = [];
+  for (var k0 = 0; k0 < r1n; k0++) pairs1.push([slot(order[2 * k0]), slot(order[2 * k0 + 1])]);
+  pairs1 = ovSlots(tour, idPrefix, 1, pairs1);
   for (var k = 0; k < r1n; k++) {
-    var A = slot(order[2 * k]), B = slot(order[2 * k + 1]);
+    var A = pairs1[k][0], B = pairs1[k][1];
     if (allowByes && A && !B) { w1.push({ name: A.name }); continue; }
     if (allowByes && B && !A) { w1.push({ name: B.name }); continue; }
     if (allowByes && !A && !B) { w1.push(null); continue; }
@@ -222,16 +251,18 @@ function elimCore(tour, teams, idPrefix, stopRound, trueFinalAtStop, labelFn, ra
   }
   winners.push(w1);
   for (var r = 2; r <= effStop; r++) {
-    var prev = winners[r - 2], cnt = prev.length / 2, wr = [];
+    var prev = winners[r - 2], cnt = prev.length / 2, wr = [], pairsR = [];
+    for (var k1 = 0; k1 < cnt; k1++) pairsR.push([prev[2 * k1], prev[2 * k1 + 1]]);
+    pairsR = ovSlots(tour, idPrefix, r, pairsR);
     for (var k2 = 0; k2 < cnt; k2++) {
-      var pa = prev[2 * k2], pb = prev[2 * k2 + 1];
+      var pa = pairsR[k2][0], pb = pairsR[k2][1];
       var aName = pa ? pa.name : null, bName = pb ? pb.name : null;
       var isLast = (r === effStop), isFinal = isLast && trueFinalAtStop;
       var dec2 = decorate(tour, {
         id: idPrefix + "R" + r + "-M" + k2, stage: isFinal ? "final" : "elimR", roundRank: rankOffset + r,
         teamA: aName || "To be decided", teamB: bName || "To be decided",
         fmtKey: isFinal ? tour.finalFormat : tour.koFormat, ready: !!(aName && bName),
-        stage_label: labelFn(cnt)
+        stage_label: labelFn(cnt), srcA: pa && !aName ? pa.src : null, srcB: pb && !bName ? pb.src : null
       });
       matches.push(dec2);
       wr.push({ name: dec2.winner, src: dec2.id });

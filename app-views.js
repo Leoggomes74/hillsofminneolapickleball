@@ -682,18 +682,19 @@ function koCard(t, m, cls, evTeams) {
   return h + '</' + tag + '>';
 }
 
-function qualCard(t, e, m, bracketCount) {
+function qualCard(t, e, m, bracketCount, inB) {
   var ready = m.ready && !t.locked;
-  var mkSide = function (name, slot, win, val) {
-    var bIdx = (slot - 1) % bracketCount, rk = Math.floor((slot - 1) / bracketCount);
-    var slotKey = 'b' + bIdx + '-r' + rk;
-    var editBtn = t.locked ? '' : '<button class="qpick" data-act="qualpick" data-val="' + e.id + '|' + slotKey + '|' + bIdx + '">' + (name === "To be decided" ? "Assign" : "Change") + '</button>';
+  var mkSide = function (name, slot, win, val, side) {
+    var bIdx, slotKey, third;
+    if (inB) { bIdx = inB.bi; slotKey = m.id + '-' + side; third = 'm' + inB.bi + ':' + m.roundRank; }
+    else { bIdx = (slot - 1) % bracketCount; slotKey = 'b' + bIdx + '-r' + Math.floor((slot - 1) / bracketCount); third = bIdx; }
+    var editBtn = t.locked ? '' : '<button class="qpick" data-act="qualpick" data-val="' + e.id + '|' + slotKey + '|' + third + '">' + (name === "To be decided" ? "Assign" : "Change") + '</button>';
     return '<div class="s' + (win ? ' w' : '') + '"><div><div class="tm">' + esc(name) + '</div>' + editBtn + '</div>' +
       (m.status === "upcoming" ? '<div></div>' : '<div class="num">' + val + '</div>') + '</div>';
   };
   var h = '<div class="sf"><div class="h">' + esc(m.stageLabel) + '</div>' +
-    mkSide(m.teamA, m.slotA, m.winner === m.teamA, m.multi ? m.winsA : m.scoreA) +
-    mkSide(m.teamB, m.slotB, m.winner === m.teamB, m.multi ? m.winsB : m.scoreB);
+    mkSide(m.teamA, m.slotA, m.winner === m.teamA, m.multi ? m.winsA : m.scoreA, 'A') +
+    mkSide(m.teamB, m.slotB, m.winner === m.teamB, m.multi ? m.winsB : m.scoreB, 'B');
   if (m.multi && m.status !== "upcoming") {
     h += '<div class="pips">' + m.games.map(function (g, i) {
       return '<span>G' + (i + 1) + ' ' + (g.status === "upcoming" ? "\u2013" : g.a + "\u2013" + g.b) + '</span>';
@@ -708,6 +709,8 @@ function qualSheet() {
   var t = tour(); if (!t) return "";
   var parts = S.qualPick.split("|"), eid = parts[0], slotKey = parts[1], bRaw = parts[2];
   var e = (t.events || []).filter(function (x) { return x.id === eid; })[0]; if (!e) return "";
+  var inRank = null;
+  if (bRaw && bRaw.charAt(0) === 'm') { var mp = bRaw.slice(1).split(':'); bRaw = mp[0]; inRank = +mp[1]; }
   var bIdx = bRaw === "all" ? null : +bRaw;
   var teams = bIdx == null ? (e.teams || []) : (e.teams || []).filter(function (x) { return (x.pool || 0) === bIdx; });
   var cur = (e.qualOverride || {})[slotKey];
@@ -717,9 +720,10 @@ function qualSheet() {
   var gameBtns = "";
   if (bIdx != null) {
     var bv = TModel.build(e);
-    (bv.elim || []).forEach(function (b) {
+    (bv.elim || []).forEach(function (b, bj) {
       if (!b.matches.length) return;
-      var maxRk = Math.max.apply(null, b.matches.map(function (m) { return m.roundRank; }));
+      if (inRank != null && bj !== bIdx) return;
+      var maxRk = inRank != null ? inRank - 1 : Math.max.apply(null, b.matches.map(function (m) { return m.roundRank; }));
       b.matches.filter(function (m) { return m.roundRank === maxRk; }).forEach(function (m) {
         gameBtns += pick('@W:' + m.id, 'Winner Game #' + m.no + ' \u00b7 ' + (m.winner || (m.teamA + ' vs ' + m.teamB)));
       });
@@ -727,7 +731,7 @@ function qualSheet() {
     teams = e.teams || [];
   }
   var btns = teams.map(function (x) { return pick(x.name, x.name); }).join('');
-  var title = bIdx == null ? "Assign \u00b7 Semifinal" : "Assign \u00b7 Quarterfinal slot";
+  var title = inRank != null ? "Assign \u00b7 " + (((TModel.build(e).all || []).filter(function (m) { return slotKey.indexOf(m.id + '-') === 0; })[0] || {}).stageLabel || "slot") : bIdx == null ? "Assign \u00b7 Semifinal" : "Assign \u00b7 Quarterfinal slot";
   return '<div class="back2" data-act="qualclose" data-back="1"><div class="sheet">' +
     '<div class="h"><b>' + title + '</b><button data-act="qualclose">CLOSE</button></div>' +
     '<div class="msg">' + (bIdx == null ? 'Pick which entry fills this slot.' : 'Pick the earlier game whose winner plays here, or place a team directly (e.g. a bye).') + '</div>' +
@@ -746,13 +750,13 @@ function elimTree(t, e, brackets, combined) {
     if (!b.matches.length) return;
     var byRound = {};
     b.matches.forEach(function (m) { (byRound[m.roundRank] = byRound[m.roundRank] || []).push(m); });
-    var rounds = Object.keys(byRound).map(Number).sort(function (x, y) { return x - y; }).map(function (rk) { return { title: byRound[rk][0].stageLabel.split(' \u00b7 ')[0], matches: byRound[rk] }; });
+    var rounds = Object.keys(byRound).map(Number).sort(function (x, y) { return x - y; }).map(function (rk) { return { title: byRound[rk][0].stageLabel.split(' \u00b7 ')[0], matches: byRound[rk], inB: rk > 1 ? { bi: bi } : null }; });
     sections.push({ label: brackets.length > 1 ? 'Bracket ' + TModel.POOL_LETTERS[bi] : null, rounds: rounds });
   });
   if (combined) {
     var byRoundC = {};
     combined.matches.forEach(function (m) { (byRoundC[m.roundRank] = byRoundC[m.roundRank] || []).push(m); });
-    var roundsC = Object.keys(byRoundC).map(Number).sort(function (x, y) { return x - y; }).map(function (rk) { return { title: byRoundC[rk][0].stageLabel, matches: byRoundC[rk] }; });
+    var roundsC = Object.keys(byRoundC).map(Number).sort(function (x, y) { return x - y; }).map(function (rk) { return { title: byRoundC[rk][0].stageLabel, matches: byRoundC[rk], assign: rk === combined.firstRoundRank ? combined.bracketCount : 0 }; });
     sections.push({ label: 'Combined bracket', rounds: roundsC });
   }
   if (!sections.length) return '<div class="empty">Not enough entries yet to build the bracket.</div>';
@@ -760,12 +764,25 @@ function elimTree(t, e, brackets, combined) {
     return (sec.label ? '<div class="lbl rule">' + esc(sec.label) + '</div>' : '') +
       '<div class="bttree">' + sec.rounds.map(function (r) {
         return '<div class="btcol"><div class="btcolh">' + esc(r.title) + '</div><div class="btcolm">' +
-          r.matches.map(function (m) { return btCard(t, m); }).join('') + '</div></div>';
+          r.matches.map(function (m) { return btCard(t, m, (r.assign || r.inB) ? e : null, r.assign, r.inB); }).join('') + '</div></div>';
       }).join('') + '</div>';
   }).join('');
 }
-function btCard(t, m) {
+function btCard(t, m, e, bc, inB) {
   var tappable = m.ready && !t.locked;
+  if (e && !t.locked) {
+    var row = function (name, slot, win, val, side) {
+      var bIdx, key, third;
+      if (inB) { bIdx = inB.bi; key = m.id + '-' + side; third = 'm' + inB.bi + ':' + m.roundRank; }
+      else { bIdx = (slot - 1) % bc; key = 'b' + bIdx + '-r' + Math.floor((slot - 1) / bc); third = bIdx; }
+      return '<div class="btrow' + (win ? ' win' : '') + '"><span>' + esc(name) + '</span><b>' + (m.status === "upcoming" ? '' : val) + '</b></div>' +
+        '<button class="btassign" data-act="qualpick" data-val="' + e.id + '|' + key + '|' + third + '">' + (name === "To be decided" ? 'Assign' : 'Change') + '</button>';
+    };
+    return '<div class="btm' + (m.status === "done" ? " done" : "") + '">' +
+      row(m.teamA, m.slotA, m.winner === m.teamA, m.multi ? m.winsA : m.scoreA, 'A') +
+      row(m.teamB, m.slotB, m.winner === m.teamB, m.multi ? m.winsB : m.scoreB, 'B') +
+      (tappable ? '<button class="btassign sc" data-act="score" data-val="' + m.id + '">Enter score \u2192</button>' : '') + '</div>';
+  }
   var att = tappable ? ' data-act="score" data-val="' + m.id + '"' : '';
   var tag = tappable ? 'button' : 'div';
   return '<' + tag + ' class="btm' + (m.status === "done" ? " done" : "") + '"' + att + '>' +
@@ -804,7 +821,7 @@ function tabElim(t, e, v) {
     b.matches.forEach(function (m) { (byRound[m.roundRank] = byRound[m.roundRank] || []).push(m); });
     Object.keys(byRound).map(Number).sort(function (x, y) { return x - y; }).forEach(function (rk) {
       h += '<div class="lbl rule">' + esc(byRound[rk][0].stageLabel.split(' \u00b7 ')[0]) + '</div>';
-      h += '<div class="kowrap">' + byRound[rk].map(function (m) { return koCard(t, m, m.stage === "final" ? "fin" : null, e.teams); }).join('') + '</div>';
+      h += '<div class="kowrap">' + byRound[rk].map(function (m) { return rk > 1 ? qualCard(t, e, m, 1, { bi: bi }) : koCard(t, m, m.stage === "final" ? "fin" : null, e.teams); }).join('') + '</div>';
     });
     if (b.champion) h += '<div class="award gold">Champion \u00b7 ' + esc(b.champion) + '</div>';
   });
