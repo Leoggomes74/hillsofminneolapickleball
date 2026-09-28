@@ -358,8 +358,14 @@ function viewEvent() {
 }
 
 function tabNow(t, e, v) {
-  var h = "", crts = {};
-  TModel.master(t).forEach(function (r) { if (r.ev.id === e.id && r.courtName) crts[r.m.id] = r.courtName; });
+  var h = "", crts = {}, pos = {};
+  TModel.master(t).forEach(function (r, i) { if (r.ev.id === e.id) { pos[r.m.id] = i; if (r.courtName) crts[r.m.id] = r.courtName; } });
+  var byPos = function (a, b) { return (pos[a.id] == null ? 1e9 : pos[a.id]) - (pos[b.id] == null ? 1e9 : pos[b.id]); };
+  v = Object.assign({}, v, {
+    live: v.live.slice().sort(byPos),
+    next: v.all.filter(function (m) { return m.status === "upcoming" && m.ready; }).sort(byPos).slice(0, 4),
+    done: v.done.slice().sort(byPos)
+  });
   var find = function (name) { return (e.teams || []).filter(function (x) { return x.name === name; })[0]; };
   var pl = function (name) { var x = find(name); return x ? players(x.players) : ""; };
   if (t.locked) h += '<div class="snap">Scoring locked — results are final</div>';
