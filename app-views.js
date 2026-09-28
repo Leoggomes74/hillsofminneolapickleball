@@ -649,7 +649,7 @@ function koCardEditable(t, e, m, slotAKey, slotBKey) {
     return '<div class="s' + (win ? ' w' : '') + '"><div><div class="seed">' + esc(seed) + '</div><div><div class="tm">' + esc(name) + '</div>' + editBtn + '</div></div>' +
       (m.status === "upcoming" ? '<div></div>' : '<div class="num">' + val + '</div>') + '</div>';
   };
-  var h = '<div class="sf"><div class="h">' + esc(m.stageLabel + (m.multi ? ' · ' + TModel.fmtLabel(m.fmtKey) : '')) + '</div>' +
+  var h = '<div class="sf"><div class="h">' + esc('Game #' + m.no + ' · ' + m.stageLabel + (m.multi ? ' · ' + TModel.fmtLabel(m.fmtKey) : '')) + '</div>' +
     mkSide(m.teamA, slotAKey, m.winner === m.teamA, m.multi ? m.winsA : m.scoreA, m.seedA) +
     mkSide(m.teamB, slotBKey, m.winner === m.teamB, m.multi ? m.winsB : m.scoreB, m.seedB);
   if (m.multi && m.status !== "upcoming") {
@@ -664,7 +664,7 @@ function koCardEditable(t, e, m, slotAKey, slotBKey) {
 function koCard(t, m, cls, evTeams) {
   var tappable = m.ready && !t.locked;
   var tag = tappable ? 'button' : 'div', att = tappable ? ' data-act="score" data-val="' + m.id + '"' : '';
-  var head = m.stageLabel + (m.multi ? ' · ' + TModel.fmtLabel(m.fmtKey) : '') + (tappable ? ' · tap to score' : '');
+  var head = 'Game #' + m.no + ' · ' + m.stageLabel + (m.multi ? ' · ' + TModel.fmtLabel(m.fmtKey) : '') + (tappable ? ' · tap to score' : '');
   var find = function (name) { return (evTeams || []).filter(function (x) { return x.name === name; })[0]; };
   var line = function (name, seed, val, win) {
     var pl = find(name), pt = pl ? players(pl.players) : "";
@@ -693,7 +693,7 @@ function qualCard(t, e, m, bracketCount, inB) {
     return '<div class="s' + (win ? ' w' : '') + '"><div><div class="tm">' + esc(name) + '</div>' + editBtn + '</div>' +
       (m.status === "upcoming" ? '<div></div>' : '<div class="num">' + val + '</div>') + '</div>';
   };
-  var h = '<div class="sf"><div class="h">' + esc(m.stageLabel) + '</div>' +
+  var h = '<div class="sf"><div class="h">' + esc('Game #' + m.no + ' · ' + m.stageLabel) + '</div>' +
     mkSide(m.teamA, m.slotA, m.winner === m.teamA, m.multi ? m.winsA : m.scoreA, 'A') +
     mkSide(m.teamB, m.slotB, m.winner === m.teamB, m.multi ? m.winsB : m.scoreB, 'B');
   if (m.multi && m.status !== "upcoming") {
@@ -767,7 +767,7 @@ function elimTree(t, e, brackets, combined) {
 // byes and manual slot assignments still read as a proper bracket.
 function treeLayout(t, e, rounds) {
   var editing = !t.locked && rounds.some(function (r) { return r.assign || r.inB; });
-  var W = 190, GAP = 34, H = editing ? 150 : 62, SLOT = H + 14, TOP = 26;
+  var W = 190, GAP = 34, H = editing ? 166 : 78, SLOT = H + 14, TOP = 26;
   var colOf = {}, feeders = {};
   rounds.forEach(function (r, ci) { r.matches.forEach(function (m) { colOf[m.id] = ci; }); });
   rounds.forEach(function (r, ci) {
@@ -817,14 +817,14 @@ function btCard(t, m, e, bc, inB) {
       return '<div class="btrow' + (win ? ' win' : '') + '"><span>' + esc(name) + '</span><b>' + (m.status === "upcoming" ? '' : val) + '</b></div>' +
         '<button class="btassign" data-act="qualpick" data-val="' + e.id + '|' + key + '|' + third + '">' + (name === "To be decided" ? 'Assign' : 'Change') + '</button>';
     };
-    return '<div class="btm' + (m.status === "done" ? " done" : "") + '">' +
+    return '<div class="btm' + (m.status === "done" ? " done" : "") + '"><div class="btno">Game #' + m.no + '</div>' +
       row(m.teamA, m.slotA, m.winner === m.teamA, m.multi ? m.winsA : m.scoreA, 'A') +
       row(m.teamB, m.slotB, m.winner === m.teamB, m.multi ? m.winsB : m.scoreB, 'B') +
       (tappable ? '<button class="btassign sc" data-act="score" data-val="' + m.id + '">Enter score \u2192</button>' : '') + '</div>';
   }
   var att = tappable ? ' data-act="score" data-val="' + m.id + '"' : '';
   var tag = tappable ? 'button' : 'div';
-  return '<' + tag + ' class="btm' + (m.status === "done" ? " done" : "") + '"' + att + '>' +
+  return '<' + tag + ' class="btm' + (m.status === "done" ? " done" : "") + '"' + att + '><div class="btno">Game #' + m.no + '</div>' +
     '<div class="btrow' + (m.winner === m.teamA ? ' win' : '') + '"><span>' + esc(m.teamA) + '</span><b>' + (m.status === "upcoming" ? '' : (m.multi ? m.winsA : m.scoreA)) + '</b></div>' +
     '<div class="btrow' + (m.winner === m.teamB ? ' win' : '') + '"><span>' + esc(m.teamB) + '</span><b>' + (m.status === "upcoming" ? '' : (m.multi ? m.winsB : m.scoreB)) + '</b></div>' +
     '</' + tag + '>';
