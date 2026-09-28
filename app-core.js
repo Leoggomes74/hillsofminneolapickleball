@@ -364,7 +364,9 @@ function elimAll(tour) {
     all = all.concat(combined.matches);
   }
   var no = 0, noOf = {};
-  all.forEach(function (m) { m.no = ++no; noOf[m.id] = no; });
+  all.forEach(function (m) { m.no = ++no; });
+  applyGameNo(tour, all);
+  all.forEach(function (m) { noOf[m.id] = m.no; });
   all.forEach(function (m) {
     if (m.srcA && noOf[m.srcA]) m.teamA = "Winner of Game #" + noOf[m.srcA];
     if (m.srcB && noOf[m.srcB]) m.teamB = "Winner of Game #" + noOf[m.srcB];
@@ -442,6 +444,19 @@ function knockout(tour, matches, tables) {
   };
 }
 
+// Admin-regenerated numbering ("Game #" follows the running order). Games
+// the snapshot didn't cover keep their order after the highest mapped number.
+function applyGameNo(tour, list) {
+  var gn = tour.gameNo || {}, keys = Object.keys(gn);
+  if (!keys.length) return;
+  var base = 0, extra = 0;
+  keys.forEach(function (k) { base = Math.max(base, gn[k] || 0); });
+  list.slice().sort(function (a, b) { return a.no - b.no; }).forEach(function (m) {
+    m.no = gn[m.id] || (base + (++extra));
+    if (m.stage === "pool") m.stageLabel = "Match " + m.no + " \u00b7 Group " + POOL_LETTERS[m.pool];
+  });
+}
+
 // Everything a view needs for ONE tournament-event (teams, pools, results, formats).
 function build(tour) {
   if (tour.format === "elim") {
@@ -460,6 +475,7 @@ function build(tour) {
   var tables = [];
   for (var i = 0; i < (tour.poolCount || 1); i++) tables.push(standings(tour, pool, i));
   var ko = knockout(tour, pool, tables);
+  applyGameNo(tour, pool.concat(ko ? ko.matches : []));
   var all = pool.concat(ko ? ko.matches.filter(function (m) { return m.ready || m.status !== "upcoming"; }) : []);
   return {
     tour: tour, pool: pool, tables: tables, ko: ko, all: all,

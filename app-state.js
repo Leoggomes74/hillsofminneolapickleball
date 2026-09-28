@@ -482,6 +482,26 @@ document.addEventListener("click", function (e) {
   if (act === "courtclose") { S.courtPick = null; return render(); }
   if (act === "qualpick") { S.qualPick = val; return render(); }
   if (act === "elimview") { S.elimView = val; return render(); }
+  if (act === "renumber") {
+    var tr = (S.db.tournaments || []).filter(function (x) { return x.id === (S.form && S.form.id); })[0];
+    if (!tr) return;
+    return needPin(function () {
+      var map = {};
+      TModel.master(tr).forEach(function (r, i) { (map[r.ev.id] = map[r.ev.id] || {})[r.m.id] = i + 1; });
+      (tr.events || []).forEach(function (ev) { ev.gameNo = map[ev.id] || {}; });
+      cacheDb(); render();
+      post({ action: "setGameNo", tournamentId: tr.id, map: map }, "Game numbers now follow the running order");
+    });
+  }
+  if (act === "renumberreset") {
+    var tr2 = (S.db.tournaments || []).filter(function (x) { return x.id === (S.form && S.form.id); })[0];
+    if (!tr2) return;
+    return needPin(function () {
+      (tr2.events || []).forEach(function (ev) { ev.gameNo = {}; });
+      cacheDb(); render();
+      post({ action: "setGameNo", tournamentId: tr2.id, map: {} }, "Default game numbers restored");
+    });
+  }
   if (act === "qualclose") { S.qualPick = null; return render(); }
   if (act === "togglebye") {
     var bParts = val.split("|"), bEid = bParts[0], bTeam = bParts[1];

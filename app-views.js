@@ -174,6 +174,15 @@ function viewForm() {
           return '<input type="text" data-cn="' + i + '" value="' + esc(n) + '" maxlength="24" placeholder="Court ' + (i + 1) + '">';
         }).join('') + '</div></div>';
     }
+    if (f.mode === "edit") {
+      var trn = (S.db.tournaments || []).filter(function (x) { return x.id === f.id; })[0];
+      var custom = trn && (trn.events || []).some(function (ev) { return ev.gameNo && Object.keys(ev.gameNo).length; });
+      h += '<div class="fsec"><label>Game numbers</label>' +
+        '<div class="gfilter" style="padding:0;margin:0 0 6px"><button type="button" class="gfb on" data-act="renumber">Regenerate from running order</button>' +
+        (custom ? '<button type="button" class="gfb" data-act="renumberreset">Back to default</button>' : '') + '</div>' +
+        '<div class="fnote">' + (custom ? 'Game # currently follows the running order (snapshot). ' : 'Game # currently follows the bracket/group structure, numbered per event. ') +
+        'Regenerate to renumber every game 1, 2, 3\u2026 across the whole tournament in the current Order-tab sequence. Run it again after rebuilding or reordering.</div></div>';
+    }
     if (f.error) h += '<div class="ferr">' + esc(f.error) + '</div>';
     h += '<div class="facts"><button class="fbtn ghost" data-act="formcancel">Cancel</button><button class="fbtn" data-act="step" data-val="2">Next: event types →</button></div>';
   } else if (f.step === 2) {
