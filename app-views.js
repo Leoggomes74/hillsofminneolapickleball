@@ -563,6 +563,7 @@ function tabSched(t, cur, v) {
     h += '<div class="' + cls + '"><div class="sno">' + r.court + '</div>' +
       '<' + (tappable ? 'button' : 'div') + ' class="sbody"' + (tappable ? ' data-act="schedscore" data-val="' + r.key + '"' : '') + '>' +
         '<div class="stop"><span class="chip ev">' + esc(typeName(r.ev.eventTypeId)) + '</span>' +
+        '<span class="sgno">Game #' + m.no + '</span>' +
         '<span class="sstage">' + esc(m.stageLabel) + '</span>' +
         '<span class="stat ' + (m.status === "done" ? 'fin' : m.status === "live" ? 'liv' : 'opn') + '">' +
           (m.status === "done" ? 'Finished' : m.status === "live" ? 'Live' : 'Open') + '</span></div>' +
@@ -760,13 +761,51 @@ function elimTree(t, e, brackets, combined) {
     sections.push({ label: 'Combined bracket', rounds: roundsC });
   }
   if (!sections.length) return '<div class="empty">Not enough entries yet to build the bracket.</div>';
-  return sections.map(function (sec) {
-    return (sec.label ? '<div class="lbl rule">' + esc(sec.label) + '</div>' : '') +
-      '<div class="bttree">' + sec.rounds.map(function (r) {
-        return '<div class="btcol"><div class="btcolh">' + esc(r.title) + '</div><div class="btcolm">' +
-          r.matches.map(function (m) { return btCard(t, m, (r.assign || r.inB) ? e : null, r.assign, r.inB); }).join('') + '</div></div>';
-      }).join('') + '</div>';
-  }).join('');
+  return sections.map(function (sec) { return (sec.label ? '<div class="lbl rule">' + esc(sec.label) + '</div>' : '') + treeLayout(t, e, sec.rounds); }).join('');
+}
+// Tidy-tree layout: each game sits level with the games that feed it, so
+// byes and manual slot assignments still read as a proper bracket.
+function treeLayout(t, e, rounds) {
+  var editing = !t.locked && rounds.some(function (r) { return r.assign || r.inB; });
+  var W = 190, GAP = 34, H = editing ? 150 : 62, SLOT = H + 14, TOP = 26;
+  var colOf = {}, feeders = {};
+  rounds.forEach(function (r, ci) { r.matches.forEach(function (m) { colOf[m.id] = ci; }); });
+  rounds.forEach(function (r, ci) {
+    if (!ci) return;
+    var prev = rounds[ci - 1].matches;
+    r.matches.forEach(function (m) {
+      feeders[m.id] = ['A', 'B'].map(function (s) {
+        var src = m['src' + s], nm = m['team' + s];
+        return prev.filter(function (p) { return src ? p.id === src : (p.winner && p.winner === nm); })[0] || null;
+      }).filter(Boolean);
+    });
+  });
+  var y = {}, leaf = 0, fed = {};
+  Object.keys(feeders).forEach(function (k) { feeders[k].forEach(function (f) { fed[f.id] = true; }); });
+  var place = function (m) {
+    var fs = feeders[m.id] || [];
+    if (!fs.length) { y[m.id] = leaf++ * SLOT + SLOT / 2; return; }
+    fs.forEach(place);
+    y[m.id] = fs.reduce(function (s, f) { return s + y[f.id]; }, 0) / fs.length;
+  };
+  for (var ci = rounds.length - 1; ci >= 0; ci--) rounds[ci].matches.forEach(function (m) { if (!fed[m.id] && y[m.id] == null) place(m); });
+  var height = TOP + Math.max(1, leaf) * SLOT, width = rounds.length * (W + GAP) - GAP;
+  var lines = '', cards = '', heads = '';
+  rounds.forEach(function (r, ci) {
+    var x = ci * (W + GAP);
+    heads += '<div class="btcolh" style="left:' + x + 'px;width:' + W + 'px">' + esc(r.title) + '</div>';
+    r.matches.forEach(function (m) {
+      var cy = TOP + y[m.id];
+      cards += '<div class="btpos" style="left:' + x + 'px;top:' + (cy - H / 2) + 'px;width:' + W + 'px;height:' + H + 'px">' +
+        btCard(t, m, (r.assign || r.inB) ? e : null, r.assign, r.inB) + '</div>';
+      (feeders[m.id] || []).forEach(function (f) {
+        var fx = colOf[f.id] * (W + GAP) + W, fy = TOP + y[f.id], mx = fx + GAP / 2;
+        lines += '<path d="M' + fx + ' ' + fy + 'H' + mx + 'V' + cy + 'H' + x + '"></path>';
+      });
+    });
+  });
+  return '<div class="bttree"><div class="btcanvas" style="width:' + width + 'px;height:' + height + 'px">' +
+    '<svg class="btlines" width="' + width + '" height="' + height + '">' + lines + '</svg>' + heads + cards + '</div></div>';
 }
 function btCard(t, m, e, bc, inB) {
   var tappable = m.ready && !t.locked;
