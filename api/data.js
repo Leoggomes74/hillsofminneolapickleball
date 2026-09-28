@@ -483,7 +483,11 @@ export default async function (req, res) {
       ev.qualOverride = ev.qualOverride && typeof ev.qualOverride === "object" ? ev.qualOverride : {};
       const slot = clean(body.slot, 20), team = clean(body.team, 40);
       if (!slot) return res.status(400).json({ error: "no such slot" });
-      if (!team) delete ev.qualOverride[slot]; else ev.qualOverride[slot] = team;
+      if (!team) delete ev.qualOverride[slot];
+      else {
+        Object.keys(ev.qualOverride).forEach(k => { if (ev.qualOverride[k] === team) delete ev.qualOverride[k]; });
+        ev.qualOverride[slot] = team;
+      }
     } else if (a === "toggleBye") {
       const cur = find(body.tournamentId);
       if (!cur) return res.status(404).json({ error: "no such tournament" });
