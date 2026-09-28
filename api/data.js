@@ -378,7 +378,6 @@ export default async function (req, res) {
       const tour = find(body.tournamentId);
       if (!tour) return res.status(404).json({ error: "no such tournament" });
       if (tour.locked) return res.status(423).json({ error: "this tournament is locked" });
-      if (tour.regActive === false) return res.status(409).json({ error: "registration is closed for this tournament" });
       const ev = (tour.events || []).find(e => e.id === body.eventId);
       if (!ev) return res.status(404).json({ error: "no such event" });
       ev.teams = Array.isArray(ev.teams) ? ev.teams : [];
