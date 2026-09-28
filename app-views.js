@@ -369,7 +369,7 @@ function tabNow(t, e, v) {
   } else {
     h += '<div class="lbl">On court now</div>';
     v.live.forEach(function (m) {
-      h += '<div class="live"><div class="top"><span>' + esc(m.stageLabel) + (crts[m.id] ? ' · ' + esc(crts[m.id]) : '') + '</span><span>' + TModel.fmtLabel(m.fmtKey) + '</span></div>' +
+      h += '<div class="live"><div class="top"><span>' + esc(gLabel(m)) + (crts[m.id] ? ' · ' + esc(crts[m.id]) : '') + '</span><span>' + TModel.fmtLabel(m.fmtKey) + '</span></div>' +
         '<div class="row"><div class="tm">' + esc(m.teamA) + (pl(m.teamA) ? '<span class="tmp">' + esc(pl(m.teamA)) + '</span>' : '') + '</div><div class="sc">' + (m.multi ? m.winsA : m.scoreA) + '</div></div>' +
         '<div class="row"><div class="tm">' + esc(m.teamB) + (pl(m.teamB) ? '<span class="tmp">' + esc(pl(m.teamB)) + '</span>' : '') + '</div><div class="sc">' + (m.multi ? m.winsB : m.scoreB) + '</div></div>' +
         (t.locked ? '' : '<button class="act" data-act="score" data-val="' + m.id + '">Update score →</button>') + '</div>';
@@ -379,22 +379,26 @@ function tabNow(t, e, v) {
     h += '<div class="lbl rule">Up next</div>';
     v.next.forEach(function (m) {
       var tag = t.locked ? 'div' : 'button', att = t.locked ? '' : ' data-act="score" data-val="' + m.id + '"';
-      h += '<' + tag + ' class="next"' + att + '><div><div class="no">#' + m.no + '</div><div class="cd">' + esc(shortStage(m)) + '</div>' + (crts[m.id] ? '<div class="cd crt">' + esc(crts[m.id]) + '</div>' : '') + '</div>' +
+      h += '<' + tag + ' class="next"' + att + '><div><div class="no"><span class="nok">Game</span>#' + m.no + '</div><div class="cd">' + esc(shortStage(m)) + '</div>' + (crts[m.id] ? '<div class="cd crt">' + esc(crts[m.id]) + '</div>' : '') + '</div>' +
         '<div><div class="t">' + esc(m.teamA) + (pl(m.teamA) ? '<span class="tmp">' + esc(pl(m.teamA)) + '</span>' : '') + '</div><div class="v">vs</div><div class="t">' + esc(m.teamB) + (pl(m.teamB) ? '<span class="tmp">' + esc(pl(m.teamB)) + '</span>' : '') + '</div></div></' + tag + '>';
     });
   }
   if (v.done.length) {
     h += '<div class="lbl rule">Latest results</div>';
     v.done.slice(-3).reverse().forEach(function (m) {
-      h += '<div class="res"><div><div class="k">' + esc(m.stageLabel) + '</div><div class="t">' + esc(m.teamA) + (pl(m.teamA) ? '<span class="tmp">' + esc(pl(m.teamA)) + '</span>' : '') + '</div><div class="t">' + esc(m.teamB) + (pl(m.teamB) ? '<span class="tmp">' + esc(pl(m.teamB)) + '</span>' : '') + '</div></div>' +
+      h += '<div class="res"><div><div class="k">' + esc(gLabel(m)) + '</div><div class="t">' + esc(m.teamA) + (pl(m.teamA) ? '<span class="tmp">' + esc(pl(m.teamA)) + '</span>' : '') + '</div><div class="t">' + esc(m.teamB) + (pl(m.teamB) ? '<span class="tmp">' + esc(pl(m.teamB)) + '</span>' : '') + '</div></div>' +
         '<div class="s"><div style="opacity:0">·</div><div>' + (m.multi ? m.winsA : m.scoreA) + '</div><div>' + (m.multi ? m.winsB : m.scoreB) + '</div></div></div>';
     });
   }
   h += '<div class="pad"></div>';
   return h;
 }
+function gLabel(m) {
+  return m.stage === "pool" ? m.stageLabel : "Game #" + m.no + " \u00b7 " + m.stageLabel;
+}
 function shortStage(m) {
   if (m.stage === "pool") return "Group " + L(m.pool);
+  if (m.stage === "elimR") return m.stageLabel;
   if (m.stage === "sf") return "Semifinal";
   if (m.stage === "bronze") return "Third place";
   return "Final";
