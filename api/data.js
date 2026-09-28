@@ -198,6 +198,7 @@ function sanitizeEvent(body, existing, requireTeamName) {
     waitlist: existing && Array.isArray(existing.waitlist) ? existing.waitlist : [],
     qualOverride: existing && existing.qualOverride && typeof existing.qualOverride === "object" ? existing.qualOverride : {},
     byeTeams: existing && Array.isArray(existing.byeTeams) ? existing.byeTeams : [],
+    gameNo: existing && existing.gameNo && typeof existing.gameNo === "object" ? existing.gameNo : {},
     results: existing ? existing.results || {} : {}
   };
 }
@@ -461,6 +462,15 @@ export default async function (req, res) {
       const cur = find(body.tournamentId);
       if (!cur) return res.status(404).json({ error: "no such tournament" });
       cur.locked = !!body.locked;
+    } else if (a === "setGameNo") {
+      const cur = find(body.tournamentId);
+      if (!cur) return res.status(404).json({ error: "no such tournament" });
+      const map = body.map && typeof body.map === "object" ? body.map : {};
+      (cur.events || []).forEach(ev => {
+        const src = map[ev.id] && typeof map[ev.id] === "object" ? map[ev.id] : {}, out = {};
+        Object.keys(src).slice(0, 600).forEach(k => { const n = parseInt(src[k], 10); if (n > 0 && n < 10000) out[clean(k, 30)] = n; });
+        ev.gameNo = out;
+      });
     } else if (a === "setOrder") {
       const cur = find(body.tournamentId);
       if (!cur) return res.status(404).json({ error: "no such tournament" });
