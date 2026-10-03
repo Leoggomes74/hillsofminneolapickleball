@@ -210,7 +210,7 @@ function blankEvent(typeId) {
   return {
     id: null, eventTypeId: typeId || (types()[0] || {}).id || "mixed-doubles",
     date: "", time: "08:00",
-    teamCount: 0, poolCount: 2, knockout: true, format: "pools", advancePerBracket: 1,
+    teamCount: 0, poolCount: 2, knockout: true, format: "pools", advancePerBracket: 1, thirdPlace: true,
     regOpen: true, maxTeams: 0,
     poolFormat: "to11win1", koFormat: "to11win2", finalFormat: "bo3to11",
     teams: []
@@ -274,6 +274,7 @@ function openEdit(id) {
           id: e.id, eventTypeId: e.eventTypeId, date: e.date || "", time: e.time || "",
           teamCount: (e.teams || []).length, poolCount: e.poolCount || 1, knockout: e.knockout !== false, format: e.format === "elim" ? "elim" : "pools",
           advancePerBracket: e.advancePerBracket || 1,
+          thirdPlace: e.thirdPlace != null ? !!e.thirdPlace : e.format !== "elim",
           regOpen: e.regOpen !== false, maxTeams: e.maxTeams || 0,
           poolFormat: e.poolFormat, koFormat: e.koFormat, finalFormat: e.finalFormat,
           teams: (e.teams || []).map(function (x) {
@@ -331,7 +332,7 @@ function submitForm() {
       return {
         id: e.id, eventTypeId: e.eventTypeId, date: e.date || f.date, time: e.time || f.time,
         poolCount: parseInt(e.poolCount, 10) || 1, knockout: !!e.knockout, format: e.format === "elim" ? "elim" : "pools",
-        advancePerBracket: parseInt(e.advancePerBracket, 10) || 1,
+        advancePerBracket: parseInt(e.advancePerBracket, 10) || 1, thirdPlace: !!e.thirdPlace,
         regOpen: !!e.regOpen, maxTeams: parseInt(e.maxTeams, 10) || 0,
         poolFormat: e.poolFormat, koFormat: e.koFormat, finalFormat: e.finalFormat,
         teams: filledRows(e).map(function (t) {
@@ -715,7 +716,7 @@ document.addEventListener("input", function (e) {
   }
   if (el.hasAttribute("data-ef")) {
     var b = el.getAttribute("data-ef").split(":"), evf = S.form.events[+b[0]], key = b[1];
-    if (key === "knockout") { evf.knockout = el.checked; return render(); }
+    if (key === "knockout" || key === "thirdPlace") { evf[key] = el.checked; return render(); }
     if (key === "regOpen") { evf.regOpen = el.checked; return render(); }
     if (key === "teamCount" || key === "poolCount") { evf[key] = el.value; syncTeamRows(evf); if (key === "poolCount") rebalance(evf); return render(); }
     evf[key] = el.value;
@@ -739,7 +740,7 @@ document.addEventListener("change", function (e) {
   var el = e.target.closest("[data-ef]");
   if (!el) return;
   var b = el.getAttribute("data-ef").split(":"), evf = S.form.events[+b[0]], key = b[1];
-  if (key === "knockout") { evf.knockout = el.checked; return render(); }
+  if (key === "knockout" || key === "thirdPlace") { evf[key] = el.checked; return render(); }
   if (key === "regOpen") { evf.regOpen = el.checked; return render(); }
   if (key === "teamCount" || key === "poolCount") { evf[key] = el.value; syncTeamRows(evf); if (key === "poolCount") rebalance(evf); return render(); }
   evf[key] = el.value;

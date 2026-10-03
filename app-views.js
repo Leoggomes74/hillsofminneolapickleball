@@ -218,6 +218,7 @@ function viewForm() {
               ? 'Each bracket plays down to ' + e.advancePerBracket + ', then the ' + (e.advancePerBracket * e.poolCount) + ' qualifiers cross over into one combined knockout.'
               : 'Leave at 1 for each bracket to play down to its own champion, with no combined stage.') + '</div></div>';
         }
+        h += thirdCheck(e, i);
         h += '<div class="fsec"><label>Match format</label>' + selectEl("data-ef", i + ":koFormat", e.koFormat, fmtOpts) + '</div>';
         h += '<div class="fsec last"><label>Final format</label>' + selectEl("data-ef", i + ":finalFormat", e.finalFormat, fmtOpts) + '</div>';
       } else {
@@ -227,7 +228,8 @@ function viewForm() {
         h += '<div class="fsec check"><label><input type="checkbox" data-ef="' + i + ':knockout"' + (e.knockout ? ' checked' : '') + '> Play a knockout stage</label>' +
           '<div class="fnote">' + knockoutBlurb(e) + '</div></div>';
         if (e.knockout) {
-          h += '<div class="fsec"><label>Semifinals &amp; third place format</label>' + selectEl("data-ef", i + ":koFormat", e.koFormat, fmtOpts) + '</div>';
+          h += thirdCheck(e, i);
+          h += '<div class="fsec"><label>Semifinals' + (e.thirdPlace ? ' &amp; third place' : '') + ' format</label>' + selectEl("data-ef", i + ":koFormat", e.koFormat, fmtOpts) + '</div>';
           h += '<div class="fsec last"><label>Final format</label>' + selectEl("data-ef", i + ":finalFormat", e.finalFormat, fmtOpts) + '</div>';
         }
       }
@@ -282,21 +284,31 @@ function roundRobinCount(e) {
   pools.forEach(function (p) { counts[p] = (counts[p] || 0) + 1; });
   var n = 0;
   Object.keys(counts).forEach(function (k) { var c = counts[k]; n += c * (c - 1) / 2; });
-  return n + (e.knockout ? 4 : 0);
+  return n + (e.knockout ? (e.thirdPlace ? 4 : 3) : 0);
+}
+function thirdCheck(e, i) {
+  return '<div class="fsec check"><label><input type="checkbox" data-ef="' + i + ':thirdPlace"' + (e.thirdPlace ? ' checked' : '') + '> Play a third-place match</label>' +
+    '<div class="fnote">' + (e.thirdPlace ? 'The two semifinal losers play off for third place before the final.' : 'No third-place match — both semifinal losers finish joint third.') + '</div></div>';
 }
 function elimMatchCount(e) {
   var pools = TModel.assignPools(e.teamCount, e.poolCount), counts = {};
   pools.forEach(function (p) { counts[p] = (counts[p] || 0) + 1; });
   var n = 0;
   Object.keys(counts).forEach(function (k) { n += Math.max(0, counts[k] - 1); });
+  if (e.thirdPlace) {
+    var adv = parseInt(e.advancePerBracket, 10) || 1, bc = Object.keys(counts).length;
+    if (adv > 1 && bc > 1) { if (adv * bc >= 4) n += 1; }
+    else Object.keys(counts).forEach(function (k) { if (counts[k] >= 4) n += 1; });
+  }
   return n;
 }
 function knockoutBlurb(e) {
   if (!e.knockout) return "Pool play only — the winner is top of the table.";
   var n = parseInt(e.poolCount, 10) || 1;
-  if (n === 1) return "Top four go to the semifinals: 1st v 4th, 2nd v 3rd. Then third place and the final.";
-  if (n === 2) return "Semifinals cross over: A1 v B2, B1 v A2. Then third place and the final.";
-  return "Pool winners qualify, filled to four by the best runners-up on point differential. Then third place and the final.";
+  var tail = e.thirdPlace === false ? " Then the final." : " Then third place and the final.";
+  if (n === 1) return "Top four go to the semifinals: 1st v 4th, 2nd v 3rd." + tail;
+  if (n === 2) return "Semifinals cross over: A1 v B2, B1 v A2." + tail;
+  return "Pool winners qualify, filled to four by the best runners-up on point differential." + tail;
 }
 
 // ---- tournament: shared bits ----------------------------------------------
@@ -653,12 +665,12 @@ function tabBracket(t, e, v) {
   var h = '<div class="bar"><h2>Knockout</h2><div class="meta">' + (ko.seeded ? "Seeded" : "Awaiting pool results") + '</div></div>';
   h += '<div class="lbl">Semifinals · ' + TModel.fmtLabel(e.koFormat) + '</div>';
   h += '<div class="kowrap">' + koCardEditable(t, e, ko.sf[0], "sf1a", "sf1b") + koCardEditable(t, e, ko.sf[1], "sf2a", "sf2b") + '</div>';
-  h += '<div class="lbl rule">Third place · ' + TModel.fmtLabel(e.koFormat) + '</div>' + koCard(t, ko.bronze, null, e.teams);
+  if (ko.bronze) h += '<div class="lbl rule">Third place · ' + TModel.fmtLabel(e.koFormat) + '</div>' + koCard(t, ko.bronze, null, e.teams);
   if (ko.third) h += '<div class="award">Third place · ' + esc(ko.third) + '</div>';
   h += '<div class="lbl rule">Final · ' + TModel.fmtLabel(e.finalFormat) + '</div>';
   h += koCard(t, ko.final, "fin", e.teams);
   if (ko.champ) h += '<div class="award gold">Champions · ' + esc(ko.champ) + '</div>';
-  h += '<div class="empty small">' + knockoutBlurb({ knockout: true, poolCount: v.tables.length }) + '</div><div class="pad"></div>';
+  h += '<div class="empty small">' + knockoutBlurb({ knockout: true, poolCount: v.tables.length, thirdPlace: !!ko.bronze }) + '</div><div class="pad"></div>';
   return h;
 }
 function koCardEditable(t, e, m, slotAKey, slotBKey) {
@@ -769,19 +781,25 @@ function elimTree(t, e, brackets, combined) {
   brackets.forEach(function (b, bi) {
     if (!b.matches.length) return;
     var byRound = {};
-    b.matches.slice().sort(byNo).forEach(function (m) { (byRound[m.roundRank] = byRound[m.roundRank] || []).push(m); });
+    b.matches.filter(notBronze).sort(byNo).forEach(function (m) { (byRound[m.roundRank] = byRound[m.roundRank] || []).push(m); });
     var rounds = Object.keys(byRound).map(Number).sort(function (x, y) { return x - y; }).map(function (rk) { return { title: byRound[rk][0].stageLabel.split(' \u00b7 ')[0], matches: byRound[rk], inB: rk > 1 ? { bi: bi } : null }; });
-    sections.push({ label: brackets.length > 1 ? 'Bracket ' + TModel.POOL_LETTERS[bi] : null, rounds: rounds });
+    sections.push({ label: brackets.length > 1 ? 'Bracket ' + TModel.POOL_LETTERS[bi] : null, rounds: rounds, bronze: b.matches.filter(isBronze)[0] });
   });
   if (combined) {
     var byRoundC = {};
-    combined.matches.slice().sort(byNo).forEach(function (m) { (byRoundC[m.roundRank] = byRoundC[m.roundRank] || []).push(m); });
+    combined.matches.filter(notBronze).sort(byNo).forEach(function (m) { (byRoundC[m.roundRank] = byRoundC[m.roundRank] || []).push(m); });
     var roundsC = Object.keys(byRoundC).map(Number).sort(function (x, y) { return x - y; }).map(function (rk) { return { title: byRoundC[rk][0].stageLabel, matches: byRoundC[rk], assign: rk === combined.firstRoundRank ? combined.bracketCount : 0 }; });
-    sections.push({ label: 'Combined bracket', rounds: roundsC });
+    sections.push({ label: 'Combined bracket', rounds: roundsC, bronze: combined.matches.filter(isBronze)[0] });
   }
   if (!sections.length) return '<div class="empty">Not enough entries yet to build the bracket.</div>';
-  return sections.map(function (sec) { return (sec.label ? '<div class="lbl rule">' + esc(sec.label) + '</div>' : '') + treeLayout(t, e, sec.rounds); }).join('');
+  return sections.map(function (sec) {
+    return (sec.label ? '<div class="lbl rule">' + esc(sec.label) + '</div>' : '') + treeLayout(t, e, sec.rounds) +
+      (sec.bronze ? '<div class="lbl rule">Third place</div><div class="btpos" style="position:relative;width:190px;height:78px">' + btCard(t, sec.bronze, null) + '</div>' : '');
+  }).join('');
 }
+function isBronze(m) { return m.stage === "bronze"; }
+function notBronze(m) { return m.stage !== "bronze"; }
+function elimThird(list) { var b = list.filter(isBronze)[0]; return b && b.winner ? b.winner : null; }
 // Tidy-tree layout: each game sits level with the games that feed it, so
 // byes and manual slot assignments still read as a proper bracket.
 function byNo(a, b) { return (a.no || 0) - (b.no || 0); }
@@ -880,8 +898,9 @@ function tabElim(t, e, v) {
     b.matches.slice().sort(byNo).forEach(function (m) { (byRound[m.roundRank] = byRound[m.roundRank] || []).push(m); });
     Object.keys(byRound).map(Number).sort(function (x, y) { return x - y; }).forEach(function (rk) {
       h += '<div class="lbl rule">' + esc(byRound[rk][0].stageLabel.split(' \u00b7 ')[0]) + '</div>';
-      h += '<div class="kowrap">' + byRound[rk].map(function (m) { return rk > 1 ? qualCard(t, e, m, 1, { bi: bi }) : koCard(t, m, m.stage === "final" ? "fin" : null, e.teams); }).join('') + '</div>';
+      h += '<div class="kowrap">' + byRound[rk].map(function (m) { return rk > 1 && !isBronze(m) ? qualCard(t, e, m, 1, { bi: bi }) : koCard(t, m, m.stage === "final" ? "fin" : null, e.teams); }).join('') + '</div>';
     });
+    if (elimThird(b.matches)) h += '<div class="award">Third place \u00b7 ' + esc(elimThird(b.matches)) + '</div>';
     if (b.champion) h += '<div class="award gold">Champion \u00b7 ' + esc(b.champion) + '</div>';
   });
   if (v.combined) {
@@ -895,6 +914,7 @@ function tabElim(t, e, v) {
         return rk === v.combined.firstRoundRank ? qualCard(t, e, m, v.combined.bracketCount) : koCard(t, m, m.stage === "final" ? "fin" : null, e.teams);
       }).join('') + '</div>';
     });
+    if (elimThird(v.combined.matches)) h += '<div class="award">Third place \u00b7 ' + esc(elimThird(v.combined.matches)) + '</div>';
     if (v.combined.champion) h += '<div class="award gold">Champions \u00b7 ' + esc(v.combined.champion) + '</div>';
   }
   if (!any) h += '<div class="empty">Not enough entries yet to build the bracket \u2014 at least two per bracket.</div>';
@@ -1117,17 +1137,17 @@ function tabInfo(t, e, v) {
     (e.format === "elim"
       ? (v.elim.length > 1 ? ' across ' + v.elim.length + ' brackets' : ' in a single bracket') + '. Single elimination — one loss and you\u2019re out: ' + v.scheduled + ' matches to a champion' + (v.elim.length > 1 ? ' per bracket' : '') + '.'
       : (v.tables.length > 1 ? ' in ' + v.tables.length + ' pools (' + counts.join(', ') + ')' : ' in a single pool') +
-        '. Everyone plays everyone in their pool: ' + v.pool.length + ' pool matches' + (e.knockout ? ' plus four knockout matches' : '') + '.'));
+        '. Everyone plays everyone in their pool: ' + v.pool.length + ' pool matches' + (e.knockout ? ' plus ' + (v.ko && !v.ko.bronze ? 'three' : 'four') + ' knockout matches' : '') + '.'));
   h += '<div class="secwrap">';
   h += sec("Scoring", e.format === "elim"
     ? 'Early rounds: ' + TModel.fmtLabel(e.koFormat).toLowerCase() + '. Final: ' + TModel.fmtLabel(e.finalFormat).toLowerCase() + '.' +
       ' Traditional side-out scoring — only the serving team scores. Call the score out loud before every serve.'
     : 'Pool games: ' + TModel.fmtLabel(e.poolFormat).toLowerCase() + '.' +
-    (e.knockout ? ' Semifinals and third place: ' + TModel.fmtLabel(e.koFormat).toLowerCase() + '. Final: ' + TModel.fmtLabel(e.finalFormat).toLowerCase() + '.' : '') +
+    (e.knockout ? (v.ko && !v.ko.bronze ? ' Semifinals: ' : ' Semifinals and third place: ') + TModel.fmtLabel(e.koFormat).toLowerCase() + '. Final: ' + TModel.fmtLabel(e.finalFormat).toLowerCase() + '.' : '') +
     ' Traditional side-out scoring — only the serving team scores. Call the score out loud before every serve.');
   h += sec("Advancing", e.format === "elim"
     ? 'Single elimination — lose once and you\u2019re out. Byes go to the top seeds when a bracket isn\u2019t a clean power of two.'
-    : knockoutBlurb({ knockout: e.knockout, poolCount: v.tables.length }) +
+    : knockoutBlurb({ knockout: e.knockout, poolCount: v.tables.length, thirdPlace: !!(v.ko && v.ko.bronze) }) +
     ' Ties break on head-to-head, then point differential, then points scored.');
   h += sec("Serving", 'Underhand only — contact below the navel, paddle head below the wrist. Drop serves allowed. The serve must clear the kitchen and land in the diagonal court; the NVZ line is a fault. No lets. Two-bounce rule: the return and the third shot must both bounce before anyone volleys.');
   h += sec("Kitchen", 'No volleying in or touching the non-volley zone line. Momentum carrying you in after a volley is a fault, even after the ball is dead. Enter freely for a bounced ball — just exit before your next volley.');

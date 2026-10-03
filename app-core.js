@@ -141,7 +141,7 @@ function decorate(tour, match) {
   return {
     id: match.id, no: match.no, stage: match.stage, stageLabel: match.stage_label || match.stage,
     pool: match.pool, bracket: match.bracket, roundRank: match.roundRank, slotA: match.slotA, slotB: match.slotB,
-    srcA: match.srcA || null, srcB: match.srcB || null,
+    srcA: match.srcA || null, srcB: match.srcB || null, lsrcA: match.lsrcA || null, lsrcB: match.lsrcB || null,
     teamA: match.teamA, teamB: match.teamB, fmtKey: match.fmtKey,
     ready: match.ready !== false, seedA: match.seedA || "", seedB: match.seedB || "",
     games: st.games, status: st.status, winner: st.winner, loser: st.loser,
@@ -230,14 +230,14 @@ function elimCore(tour, teams, idPrefix, stopRound, trueFinalAtStop, labelFn, ra
   var bsize = nextPow2(n), order = seedOrder(bsize), totalRounds = Math.log2(bsize);
   var effStop = stopRound == null ? totalRounds : Math.min(stopRound, totalRounds);
   var slot = function (seedNum) { return teams[seedNum - 1] || null; };
-  var matches = [], winners = [], r1n = bsize / 2, w1 = [], pairs1 = [];
+  var matches = [], winners = [], r1n = bsize / 2, w1 = [], pairs1 = [], decs = [[]];
   for (var k0 = 0; k0 < r1n; k0++) pairs1.push([slot(order[2 * k0]), slot(order[2 * k0 + 1])]);
   pairs1 = ovSlots(tour, idPrefix, 1, pairs1);
   for (var k = 0; k < r1n; k++) {
     var A = pairs1[k][0], B = pairs1[k][1];
-    if (allowByes && A && !B) { w1.push({ name: A.name }); continue; }
-    if (allowByes && B && !A) { w1.push({ name: B.name }); continue; }
-    if (allowByes && !A && !B) { w1.push(null); continue; }
+    if (allowByes && A && !B) { w1.push({ name: A.name }); decs[0].push(null); continue; }
+    if (allowByes && B && !A) { w1.push({ name: B.name }); decs[0].push(null); continue; }
+    if (allowByes && !A && !B) { w1.push(null); decs[0].push(null); continue; }
     var aName1 = A && A.name ? A.name : null, bName1 = B && B.name ? B.name : null;
     var isLast1 = (1 === effStop), isFinal1 = isLast1 && trueFinalAtStop;
     var dec = decorate(tour, {
@@ -246,12 +246,13 @@ function elimCore(tour, teams, idPrefix, stopRound, trueFinalAtStop, labelFn, ra
       ready: !!(aName1 && bName1), stage_label: labelFn(r1n), slotA: order[2 * k], slotB: order[2 * k + 1],
       srcA: A && !aName1 ? A.src : null, srcB: B && !bName1 ? B.src : null
     });
-    matches.push(dec);
+    matches.push(dec); decs[0].push(dec);
     w1.push({ name: dec.winner, src: dec.id });
   }
   winners.push(w1);
   for (var r = 2; r <= effStop; r++) {
     var prev = winners[r - 2], cnt = prev.length / 2, wr = [], pairsR = [];
+    decs[r - 1] = [];
     for (var k1 = 0; k1 < cnt; k1++) pairsR.push([prev[2 * k1], prev[2 * k1 + 1]]);
     pairsR = ovSlots(tour, idPrefix, r, pairsR);
     for (var k2 = 0; k2 < cnt; k2++) {
@@ -264,10 +265,21 @@ function elimCore(tour, teams, idPrefix, stopRound, trueFinalAtStop, labelFn, ra
         fmtKey: isFinal ? tour.finalFormat : tour.koFormat, ready: !!(aName && bName),
         stage_label: labelFn(cnt), srcA: pa && !aName ? pa.src : null, srcB: pb && !bName ? pb.src : null
       });
-      matches.push(dec2);
+      matches.push(dec2); decs[r - 1].push(dec2);
       wr.push({ name: dec2.winner, src: dec2.id });
     }
     winners.push(wr);
+  }
+  // Optional third-place game between the two semifinal losers.
+  var semis = effStop >= 2 ? decs[effStop - 2] : null;
+  if (trueFinalAtStop && hasThird(tour) && semis && semis.length === 2 && semis[0] && semis[1]) {
+    var la = semis[0].loser || null, lb = semis[1].loser || null;
+    var br = decorate(tour, {
+      id: idPrefix + "BR", stage: "bronze", roundRank: rankOffset + effStop - 0.5,
+      teamA: la || "To be decided", teamB: lb || "To be decided", fmtKey: tour.koFormat, ready: !!(la && lb),
+      stage_label: labelFn(1).replace(/^Final/, "Third place"), lsrcA: la ? null : semis[0].id, lsrcB: lb ? null : semis[1].id
+    });
+    matches.splice(matches.length - 1, 0, br);
   }
   return { matches: matches, winners: winners[effStop - 1] || teams, rounds: effStop };
 }
@@ -370,6 +382,8 @@ function elimAll(tour) {
   all.forEach(function (m) {
     if (m.srcA && noOf[m.srcA]) m.teamA = "Winner of Game #" + noOf[m.srcA];
     if (m.srcB && noOf[m.srcB]) m.teamB = "Winner of Game #" + noOf[m.srcB];
+    if (m.lsrcA && noOf[m.lsrcA]) m.teamA = "Loser of Game #" + noOf[m.lsrcA];
+    if (m.lsrcB && noOf[m.lsrcB]) m.teamB = "Loser of Game #" + noOf[m.lsrcB];
   });
   return { brackets: brackets, combined: combined, all: all };
 }
@@ -413,6 +427,11 @@ function seeds(tour, tables, complete) {
   ];
 }
 
+// Third-place game: explicit per event; older events default to on for pool
+// play (it always had one) and off for single elimination.
+function hasThird(tour) {
+  return tour.thirdPlace != null ? !!tour.thirdPlace : tour.format !== "elim";
+}
 function knockout(tour, matches, tables) {
   if (!tour.knockout) return null;
   var pm = matches.filter(function (m) { return m.stage === "pool"; });
@@ -433,14 +452,14 @@ function knockout(tour, matches, tables) {
   var a2 = ov.sf2a || (pair && pair[1].a), b2 = ov.sf2b || (pair && pair[1].b);
   var sf1 = mk("SF1", 1, "Semifinal 1", "sf", tour.koFormat, a1, b1, pair ? pair[0].sa : lab[0][0], pair ? pair[0].sb : lab[0][1]);
   var sf2 = mk("SF2", 2, "Semifinal 2", "sf", tour.koFormat, a2, b2, pair ? pair[1].sa : lab[1][0], pair ? pair[1].sb : lab[1][1]);
-  var bronze = mk("BR", 3, "Third place", "bronze", tour.koFormat, sf1.loser, sf2.loser, "Loser SF1", "Loser SF2");
-  var final = mk("FN", 4, "Final", "final", tour.finalFormat, sf1.winner, sf2.winner, "Winner SF1", "Winner SF2");
+  var bronze = hasThird(tour) ? mk("BR", 3, "Third place", "bronze", tour.koFormat, sf1.loser, sf2.loser, "Loser SF1", "Loser SF2") : null;
+  var final = mk("FN", bronze ? 4 : 3, "Final", "final", tour.finalFormat, sf1.winner, sf2.winner, "Winner SF1", "Winner SF2");
 
   return {
-    matches: [sf1, sf2, bronze, final],
+    matches: bronze ? [sf1, sf2, bronze, final] : [sf1, sf2, final],
     sf: [sf1, sf2], bronze: bronze, final: final,
     seeded: !!pair,
-    champ: final.winner, runner: final.loser, third: bronze.winner
+    champ: final.winner, runner: final.loser, third: bronze ? bronze.winner : null
   };
 }
 
@@ -496,7 +515,7 @@ function autoOrder(tour) {
   evs.forEach(function (e) {
     var v = build(e);
     pools.push(v.pool.map(function (m) { return e.id + "|" + m.id; }));
-    kos.push(v.ko ? ["SF1", "SF2", "BR", "FN"].map(function (id) { return e.id + "|" + id; }) : []);
+    kos.push(v.ko ? v.ko.matches.map(function (m) { return e.id + "|" + m.id; }) : []);
     if (v.elim) v.elim.forEach(function (b) { b.matches.forEach(function (m) { elims.push(e.id + "|" + m.id); }); });
     if (v.combined) v.combined.matches.forEach(function (m) { elims.push(e.id + "|" + m.id); });
   });
