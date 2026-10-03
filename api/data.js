@@ -191,6 +191,7 @@ function sanitizeEvent(body, existing, requireTeamName) {
     maxTeams: Math.max(0, Math.min(32, parseInt(body.maxTeams, 10) || 0)),
     poolCount: Math.max(1, Math.min(8, parseInt(body.poolCount, 10) || 1)),
     knockout: body.knockout !== false,
+    thirdPlace: body.thirdPlace != null ? !!body.thirdPlace : (existing && existing.thirdPlace != null ? !!existing.thirdPlace : body.format !== "elim"),
     poolFormat: clean(body.poolFormat, 12) || "to11win1",
     koFormat: clean(body.koFormat, 12) || "to11win2",
     finalFormat: clean(body.finalFormat, 12) || "to11win2",
