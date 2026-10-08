@@ -221,7 +221,8 @@ function blankForm() {
     mode: "new", id: null, name: "", director: "", fee: "",
     regActive: true, requireTeamName: true,
     courtCount: 2, courtNames: ["Court 1", "Court 2"],
-    date: new Date().toISOString().slice(0, 10), time: "08:00",
+    date: new Date().toISOString().slice(0, 10), time: "08:00", endDate: "", endTime: "",
+    address: "", phone: "", email: "",
     events: [blankEvent()], step: 1, error: ""
   };
   f.events[0].date = f.date;
@@ -268,7 +269,8 @@ function openEdit(id) {
       mode: "edit", id: t.id, name: t.name, director: t.director || "", fee: t.fee || "",
       regActive: t.regActive !== false, requireTeamName: t.requireTeamName !== false,
       courtCount: t.courtCount || 0, courtNames: (TModel.courtsOf(t) || []).slice(),
-      date: t.date || "", time: t.time || "",
+      date: t.date || "", time: t.time || "", endDate: t.endDate || "", endTime: t.endTime || "",
+      address: t.address || "", phone: t.phone || "", email: t.email || "",
       events: evsOf(t).map(function (e) {
         return {
           id: e.id, eventTypeId: e.eventTypeId, date: e.date || "", time: e.time || "",
@@ -290,6 +292,8 @@ function openEdit(id) {
 }
 function formValid(f) {
   if (!String(f.name).trim()) return "Give the tournament a name.";
+  if (f.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(f.email).trim())) return "Contact email doesn't look right.";
+  if (f.endDate && f.date && (f.endDate + "T" + (f.endTime || "23:59")) < (f.date + "T" + (f.time || "00:00"))) return "The end date and time must be after the start.";
   if (!f.events.length) return "Add at least one event type to this tournament.";
   var seen = {}, err = "";
   f.events.forEach(function (e) {
@@ -324,6 +328,8 @@ function submitForm() {
   if (err) { f.error = err; render(); return; }
   var payload = {
     name: f.name, director: String(f.director || "").trim(), fee: String(f.fee || "").trim(), date: f.date, time: f.time,
+    endDate: f.endDate || "", endTime: f.endTime || "",
+    address: String(f.address || "").trim(), phone: String(f.phone || "").trim(), email: String(f.email || "").trim(),
     regActive: f.regActive !== false, requireTeamName: f.requireTeamName !== false,
     courtCount: parseInt(f.courtCount, 10) || 0,
     courtNames: (f.courtNames || []).map(function (n) { return String(n || "").trim(); }),

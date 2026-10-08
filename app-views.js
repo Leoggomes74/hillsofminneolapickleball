@@ -6,7 +6,21 @@ function when(t) {
   var d = new Date(t.date + "T" + (t.time || "00:00"));
   if (isNaN(d)) return t.date;
   var s = d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric", year: "numeric" });
-  return t.time ? s + " · " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : s;
+  var tm = function (x) { return x.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); };
+  s = t.time ? s + " · " + tm(d) : s;
+  if (t.endDate || t.endTime) {
+    var ed = t.endDate || t.date, e = new Date(ed + "T" + (t.endTime || "00:00"));
+    if (!isNaN(e)) s += ed === t.date ? (t.endTime ? " – " + tm(e) : "")
+      : " – " + e.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric", year: "numeric" }) + (t.endTime ? " · " + tm(e) : "");
+  }
+  return s;
+}
+function contactHtml(t) {
+  var p = [];
+  if (t.address) p.push('<a href="https://maps.google.com/?q=' + encodeURIComponent(t.address) + '" target="_blank" rel="noopener">' + esc(t.address) + '</a>');
+  if (t.phone) p.push('<a href="tel:' + esc(String(t.phone).replace(/[^+\d]/g, "")) + '">' + esc(t.phone) + '</a>');
+  if (t.email) p.push('<a href="mailto:' + esc(t.email) + '">' + esc(t.email) + '</a>');
+  return p.join('<br>');
 }
 function shortWhen(e) {
   if (!e || !e.date) return "TBD";
@@ -164,8 +178,13 @@ function viewForm() {
       '<div class="fnote">' + (f.requireTeamName
         ? 'Entrants pick a team/entry name plus their player name(s).'
         : 'Entrants enter only player name(s); their entry is listed by player name everywhere in the app.') + ' Applies to every event in this tournament.</div></div>';
+    h += '<div class="fsec"><label>Address</label><input type="text" data-field="address" value="' + esc(f.address) + '" maxlength="120" placeholder="Venue name, street, city"></div>';
+    h += '<div class="fsec two"><div><label>Contact phone</label><input type="tel" data-field="phone" value="' + esc(f.phone) + '" maxlength="30" placeholder="e.g. (352) 555-0123"></div>' +
+      '<div><label>Contact email</label><input type="email" data-field="email" value="' + esc(f.email) + '" maxlength="80" placeholder="name@example.com"></div></div>';
     h += '<div class="fsec two"><div><label>Start date</label><input type="date" data-field="date" value="' + esc(f.date) + '"></div>' +
       '<div><label>Start time</label><input type="time" data-field="time" value="' + esc(f.time) + '"></div></div>';
+    h += '<div class="fsec two"><div><label>End date</label><input type="date" data-field="endDate" value="' + esc(f.endDate) + '" min="' + esc(f.date) + '"></div>' +
+      '<div><label>End time</label><input type="time" data-field="endTime" value="' + esc(f.endTime) + '"></div></div>';
     h += '<div class="fsec"><label>Number of courts</label><input type="number" min="0" max="12" data-field="courtCount" value="' + esc(String(f.courtCount || 0)) + '">' +
       '<div class="fnote">Games are dealt out across these courts in running order, so each court gets the same number (±1). Leave at 0 if you do not track courts.</div></div>';
     if ((f.courtNames || []).length) {
@@ -1118,6 +1137,7 @@ function tabInfo(t, e, v) {
   var h = '<div class="bar"><h2>Format &amp; rules</h2></div>';
   h += sec("This tournament", esc(t.name) + ' — ' + esc(when(t)) + '. ' + evs.length + ' event' + (evs.length === 1 ? '' : 's') + ' on the programme.' +
     (t.director ? ' Tournament director: <b>' + esc(t.director) + '</b>.' : ''));
+  if (t.address || t.phone || t.email) h += sec("Venue &amp; contact", contactHtml(t));
   h += sec("Registration fee", t.fee
     ? '<b>' + esc(t.fee) + '</b>, payable to the Tournament Organization.'
     : 'No entry fee for this tournament.');
