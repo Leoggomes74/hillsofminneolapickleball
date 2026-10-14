@@ -171,6 +171,8 @@ const slug = s => clean(s, 40).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace
 const rid = p => p + Date.now().toString(36).slice(-4) + Math.random().toString(36).slice(2, 5);
 
 function sanitizeEvent(body, existing, requireTeamName) {
+  const mixer = body.format === "mixer";
+  if (mixer) requireTeamName = false;
   const teams = Array.isArray(body.teams) ? body.teams.slice(0, 32).map((t, i) => {
     const players = (Array.isArray(t && t.players) ? t.players : []).slice(0, 2).map(p => clean(p, 40)).filter(Boolean);
     return {
@@ -185,12 +187,15 @@ function sanitizeEvent(body, existing, requireTeamName) {
     eventTypeId: slug(body.eventTypeId || "mixed-doubles"),
     date: clean(body.date, 10),
     time: clean(body.time, 5),
-    format: body.format === "elim" ? "elim" : "pools",
+    format: body.format === "elim" || mixer ? body.format : "pools",
+    mixRounds: Math.max(1, Math.min(30, parseInt(body.mixRounds, 10) || 6)),
+    mixGames: Math.max(1, Math.min(30, parseInt(body.mixGames, 10) || 5)),
+    mixSched: existing && existing.mixSched ? existing.mixSched : null,
     advancePerBracket: Math.max(1, Math.min(16, parseInt(body.advancePerBracket, 10) || 1)),
     regOpen: body.regOpen !== false,
     maxTeams: Math.max(0, Math.min(32, parseInt(body.maxTeams, 10) || 0)),
-    poolCount: Math.max(1, Math.min(8, parseInt(body.poolCount, 10) || 1)),
-    knockout: body.knockout !== false,
+    poolCount: mixer ? 1 : Math.max(1, Math.min(8, parseInt(body.poolCount, 10) || 1)),
+    knockout: mixer ? false : body.knockout !== false,
     thirdPlace: body.thirdPlace != null ? !!body.thirdPlace : (existing && existing.thirdPlace != null ? !!existing.thirdPlace : body.format !== "elim"),
     poolFormat: clean(body.poolFormat, 12) || "to11win1",
     koFormat: clean(body.koFormat, 12) || "to11win2",
@@ -294,11 +299,11 @@ export default async function (req, res) {
       if (!ev) return res.status(404).json({ error: "no such event" });
       if (ev.regOpen === false) return res.status(409).json({ error: "registration is closed for this event" });
       const type = (db.eventTypes || []).find(x => x.id === ev.eventTypeId);
-      const single = type ? !!type.singles : false;
-      const p1 = clean(body.p1, 40), p2 = clean(body.p2, 40);
+      const mixR = ev.format === "mixer", single = mixR || (type ? !!type.singles : false);
+      const p1 = clean(body.p1, 40), p2 = mixR ? "" : clean(body.p2, 40);
       if (!p1 || (!single && !p2)) return res.status(400).json({ error: single ? "player name is required" : "your name and your partner's name are required" });
-      const name = tour.requireTeamName === false ? (single ? p1 : (p1 + " / " + p2)) : clean(body.team, 40);
-      if (tour.requireTeamName !== false && !name) return res.status(400).json({ error: "name, player and partner are required" });
+      const name = tour.requireTeamName === false || mixR ? (single ? p1 : (p1 + " / " + p2)) : clean(body.team, 40);
+      if (tour.requireTeamName !== false && !mixR && !name) return res.status(400).json({ error: "name, player and partner are required" });
       ev.teams = Array.isArray(ev.teams) ? ev.teams : [];
       const cap = ev.maxTeams ? Math.min(ev.maxTeams, 32) : 32;
       if (ev.teams.length >= cap) return res.status(409).json({ error: "this event is full" });
@@ -324,7 +329,7 @@ export default async function (req, res) {
       ev.teams = Array.isArray(ev.teams) ? ev.teams : [];
       ev.waitlist = Array.isArray(ev.waitlist) ? ev.waitlist : [];
       const type = (db.eventTypes || []).find(x => x.id === ev.eventTypeId);
-      const single = type ? !!type.singles : false;
+      const mixW = ev.format === "mixer", single = mixW || (type ? !!type.singles : false);
       const cap = ev.maxTeams ? Math.min(ev.maxTeams, 32) : 32;
       const lower = s => String(s).toLowerCase();
 
@@ -345,10 +350,10 @@ export default async function (req, res) {
         if (tour.regActive === false) return res.status(409).json({ error: "registration is closed for this tournament" });
         if (ev.regOpen === false) return res.status(409).json({ error: "registration is closed for this event" });
         if (ev.teams.length < cap) return res.status(409).json({ error: "there are still spots open — register normally" });
-        const wp1 = clean(body.p1, 40), wp2 = clean(body.p2, 40);
+        const wp1 = clean(body.p1, 40), wp2 = mixW ? "" : clean(body.p2, 40);
         if (!wp1 || (!single && !wp2)) return res.status(400).json({ error: single ? "player name is required" : "your name and your partner's name are required" });
-        const name = tour.requireTeamName === false ? (single ? wp1 : (wp1 + " / " + wp2)) : clean(body.team, 40);
-        if (tour.requireTeamName !== false && !name) return res.status(400).json({ error: "name, player and partner are required" });
+        const name = tour.requireTeamName === false || mixW ? (single ? wp1 : (wp1 + " / " + wp2)) : clean(body.team, 40);
+        if (tour.requireTeamName !== false && !mixW && !name) return res.status(400).json({ error: "name, player and partner are required" });
         if (ev.waitlist.length >= 32) return res.status(409).json({ error: "the waitlist is full too" });
         if (ev.teams.some(t => lower(t.name) === lower(name)) || ev.waitlist.some(w => lower(w.name) === lower(name)))
           return res.status(409).json({ error: "that name is already taken" });
@@ -398,17 +403,22 @@ export default async function (req, res) {
         for (const k of Object.keys(ev.results)) if (k.indexOf(`P${pool}-`) === 0) delete ev.results[k];
       } else {
         const type = (db.eventTypes || []).find(x => x.id === ev.eventTypeId);
-        const single = type ? !!type.singles : false;
-        const p1 = clean(body.p1, 40), p2 = clean(body.p2, 40);
+        const mixU = ev.format === "mixer", single = mixU || (type ? !!type.singles : false);
+        const p1 = clean(body.p1, 40), p2 = mixU ? "" : clean(body.p2, 40);
         if (!p1 || (!single && !p2)) return res.status(400).json({ error: "player name(s) required" });
-        const name = tour.requireTeamName === false ? (single ? p1 : (p1 + " / " + p2)) : clean(body.name, 40);
-        if (tour.requireTeamName !== false && !name) return res.status(400).json({ error: "name and player(s) required" });
+        const name = tour.requireTeamName === false || mixU ? (single ? p1 : (p1 + " / " + p2)) : clean(body.name, 40);
+        if (tour.requireTeamName !== false && !mixU && !name) return res.status(400).json({ error: "name and player(s) required" });
         const lower = s => String(s).toLowerCase();
         if (ev.teams.some((t, j) => j !== i && lower(t.name) === lower(name))) return res.status(409).json({ error: "that team name is already taken" });
         const before = Math.min(pc - 1, Math.max(0, ev.teams[i].pool || 0));
         const pool = Math.min(pc - 1, Math.max(0, parseInt(body.pool, 10) || 0));
+        const oldP = (ev.teams[i].players || [])[0];
         ev.teams[i].name = name;
         ev.teams[i].players = single ? [p1] : [p1, p2];
+        // Individual draws store player names, so carry a rename through.
+        if (mixU && oldP && oldP !== p1 && ev.mixSched && Array.isArray(ev.mixSched.rounds)) {
+          ev.mixSched.rounds.forEach(r => (r || []).forEach(g => ["a", "b"].forEach(s => { g[s] = (g[s] || []).map(p => p === oldP ? p1 : p); })));
+        }
         if (pool !== before) {
           ev.teams[i].pool = pool;
           ev.results = ev.results || {};
@@ -503,6 +513,19 @@ export default async function (req, res) {
         Object.keys(ev.qualOverride).forEach(k => { if (ev.qualOverride[k] === team) delete ev.qualOverride[k]; });
         ev.qualOverride[slot] = team;
       }
+    } else if (a === "setMix") {
+      const cur = find(body.tournamentId);
+      if (!cur) return res.status(404).json({ error: "no such tournament" });
+      if (cur.locked) return res.status(423).json({ error: "tournament locked" });
+      const ev = (cur.events || []).find(e => e.id === body.eventId);
+      if (!ev) return res.status(404).json({ error: "no such event" });
+      const side = x => (Array.isArray(x) ? x : []).slice(0, 2).map(p => clean(p, 40));
+      const rounds = (Array.isArray(body.rounds) ? body.rounds : []).slice(0, 30)
+        .map(r => (Array.isArray(r) ? r : []).slice(0, 16).map(g => ({ a: side(g && g.a), b: side(g && g.b) })));
+      ev.mixSched = { rounds, at: Date.now() };
+      ev.results = ev.results || {};
+      for (const k of Object.keys(ev.results)) if (k.charAt(0) === "X") delete ev.results[k];
+      ev.gameNo = {};
     } else if (a === "toggleBye") {
       const cur = find(body.tournamentId);
       if (!cur) return res.status(404).json({ error: "no such tournament" });
