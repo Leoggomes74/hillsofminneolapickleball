@@ -476,8 +476,130 @@ function applyGameNo(tour, list) {
   });
 }
 
+// ---- individual round robin (rotating partners) ---------------------------
+// Plan for N players over R rounds, G games each, on C courts (0 = unlimited).
+function mixPlan(n, R, G, C) {
+  R = Math.max(1, parseInt(R, 10) || 1); G = Math.max(1, Math.min(R, parseInt(G, 10) || 1));
+  var perRoundMax = Math.floor(n / 4); if (C > 0) perRoundMax = Math.min(perRoundMax, C);
+  var total = Math.floor(n * G / 4), short = n * G - total * 4;
+  var out = { n: n, R: R, G: G, S: R - G, total: total, short: short, perRoundMax: perRoundMax, error: "" };
+  if (n < 4) out.error = "At least 4 players are needed.";
+  else if (total > R * perRoundMax) out.error = "Not enough " + (C > 0 && C < Math.floor(n / 4) ? "courts" : "players") + " for " + G + " games each in " + R + " rounds \u2014 at most " + perRoundMax + " game" + (perRoundMax === 1 ? "" : "s") + " per round. Add rounds or lower games per player.";
+  var base = Math.floor(total / R), extra = total % R;
+  out.perRound = [];
+  for (var r = 0; r < R; r++) out.perRound.push(base + (r < extra ? 1 : 0));
+  return out;
+}
+function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), x = a[i]; a[i] = a[j]; a[j] = x; } return a; }
+// Random draw: who plays each round (balanced so everyone reaches their game
+// count), then partners/opponents chosen to avoid repeats as far as possible.
+function mixGenerate(names, R, G, C) {
+  var plan = mixPlan(names.length, R, G, C);
+  if (plan.error) return { error: plan.error };
+  var best = null;
+  for (var attempt = 0; attempt < 40; attempt++) {
+    var n = names.length, target = names.map(function () { return plan.G; });
+    shuffle(names.map(function (x, i) { return i; })).slice(0, plan.short).forEach(function (i) { target[i]--; });
+    var played = names.map(function () { return 0; }), sat = names.map(function () { return 0; });
+    var partner = {}, opp = {}, rounds = [], cost = 0, ok = true;
+    var key = function (a, b) { return a < b ? a + "|" + b : b + "|" + a; };
+    for (var r = 0; r < plan.R; r++) {
+      var need = plan.perRound[r] * 4, left = plan.R - r;
+      var order = shuffle(names.map(function (x, i) { return i; })).sort(function (a, b) {
+        var ua = (target[a] - played[a]) / left, ub = (target[b] - played[b]) / left;
+        return ub - ua || sat[b] - sat[a];
+      });
+      var pick = order.slice(0, need);
+      if (pick.some(function (i) { return played[i] >= target[i]; })) ok = false;
+      var bestR = null, bestC = 1e9;
+      for (var tr = 0; tr < 300; tr++) {
+        var p = shuffle(pick.slice()), c = 0, games = [];
+        for (var g = 0; g < p.length; g += 4) {
+          var A = [p[g], p[g + 1]], B = [p[g + 2], p[g + 3]];
+          c += 20 * ((partner[key(A[0], A[1])] || 0) + (partner[key(B[0], B[1])] || 0));
+          A.forEach(function (x) { B.forEach(function (y) { c += 3 * (opp[key(x, y)] || 0); }); });
+          games.push([A, B]);
+        }
+        if (c < bestC) { bestC = c; bestR = games; if (!c) break; }
+      }
+      cost += bestC;
+      bestR.forEach(function (gm) {
+        var A = gm[0], B = gm[1];
+        partner[key(A[0], A[1])] = (partner[key(A[0], A[1])] || 0) + 1;
+        partner[key(B[0], B[1])] = (partner[key(B[0], B[1])] || 0) + 1;
+        A.forEach(function (x) { B.forEach(function (y) { opp[key(x, y)] = (opp[key(x, y)] || 0) + 1; }); });
+      });
+      var inR = {}; pick.forEach(function (i) { inR[i] = 1; played[i]++; });
+      names.forEach(function (x, i) { sat[i] = inR[i] ? 0 : sat[i] + 1; });
+      rounds.push(bestR.map(function (gm) { return { a: [names[gm[0][0]], names[gm[0][1]]], b: [names[gm[1][0]], names[gm[1][1]]] }; }));
+    }
+    if (!ok) cost += 1e6;
+    if (!best || cost < best.cost) best = { cost: cost, rounds: rounds };
+    if (!cost) break;
+  }
+  return { rounds: best.rounds, plan: plan };
+}
+function mixMatches(tour) {
+  var sch = (tour.mixSched && tour.mixSched.rounds) || [], out = [], no = 0;
+  sch.forEach(function (games, r) {
+    (games || []).forEach(function (g, k) {
+      var m = decorate(tour, {
+        id: "X" + r + "-" + k, stage: "mix", round: r + 1, no: ++no,
+        teamA: (g.a || []).join(" & "), teamB: (g.b || []).join(" & "), fmtKey: tour.poolFormat, ready: true,
+        stage_label: "Round " + (r + 1)
+      });
+      m.round = r + 1; m.pa = (g.a || []).slice(); m.pb = (g.b || []).slice();
+      out.push(m);
+    });
+  });
+  return out;
+}
+// Individual table: wins, then fewer losses, then point differential, then points won.
+function mixStandings(tour, matches) {
+  var rows = {}, list = [];
+  var row = function (n) { if (!rows[n]) { rows[n] = { player: n, g: 0, w: 0, l: 0, pf: 0, pa: 0 }; list.push(rows[n]); } return rows[n]; };
+  (tour.teams || []).forEach(function (t) { row((t.players || [])[0] || t.name); });
+  matches.forEach(function (m) {
+    m.pa.concat(m.pb).forEach(row);
+    if (m.status !== "done") return;
+    var aWin = m.winner === m.teamA;
+    m.pa.forEach(function (p) { var x = row(p); x.g++; x.pf += m.ptsA; x.pa += m.ptsB; if (aWin) x.w++; else x.l++; });
+    m.pb.forEach(function (p) { var x = row(p); x.g++; x.pf += m.ptsB; x.pa += m.ptsA; if (aWin) x.l++; else x.w++; });
+  });
+  list.forEach(function (r) { r.d = r.pf - r.pa; });
+  list.sort(function (x, y) { return y.w - x.w || x.l - y.l || y.d - x.d || y.pf - x.pf || (x.player < y.player ? -1 : 1); });
+  return list.map(function (r, i) {
+    return { pos: i + 1, player: r.player, g: r.g, w: r.w, l: r.l, pf: r.pf, pa: r.pa, d: r.d, diff: (r.d > 0 ? "+" : "") + r.d, rec: r.w + "\u2013" + r.l };
+  });
+}
+
 // Everything a view needs for ONE tournament-event (teams, pools, results, formats).
 function build(tour) {
+  if (tour.format === "mixer") {
+    var mx = mixMatches(tour);
+    applyGameNo(tour, mx);
+    var table = mixStandings(tour, mx), roster = {};
+    (tour.teams || []).forEach(function (t) { roster[(t.players || [])[0] || t.name] = 1; });
+    var inSched = {}, rounds = [];
+    mx.forEach(function (m) {
+      (rounds[m.round - 1] = rounds[m.round - 1] || { no: m.round, matches: [], sit: [] }).matches.push(m);
+      m.pa.concat(m.pb).forEach(function (p) { inSched[p] = 1; });
+    });
+    rounds.forEach(function (rd) {
+      var on = {}; rd.matches.forEach(function (m) { m.pa.concat(m.pb).forEach(function (p) { on[p] = 1; }); });
+      rd.sit = Object.keys(roster).filter(function (p) { return !on[p]; });
+    });
+    var stale = mx.length > 0 && (Object.keys(roster).some(function (p) { return !inSched[p]; }) || Object.keys(inSched).some(function (p) { return !roster[p]; }));
+    var finished = mx.length > 0 && mx.every(function (m) { return m.status === "done"; });
+    return {
+      tour: tour, pool: mx, tables: [], ko: null, all: mx, mix: { rounds: rounds, table: table, stale: stale, finished: finished },
+      scheduled: mx.length,
+      live: mx.filter(function (m) { return m.status === "live"; }),
+      done: mx.filter(function (m) { return m.status === "done"; }),
+      next: mx.filter(function (m) { return m.status === "upcoming"; }).slice(0, 4),
+      byId: (function () { var o = {}; mx.forEach(function (m) { o[m.id] = m; }); return o; })()
+    };
+  }
   if (tour.format === "elim") {
     var ex = elimAll(tour), all = ex.all;
     return {
@@ -583,6 +705,6 @@ window.TModel = {
   FORMATS: FORMATS, FORMAT_KEYS: FORMAT_KEYS, CATEGORIES: CATEGORIES, POOL_LETTERS: POOL_LETTERS,
   DEFAULT_TYPES: DEFAULT_TYPES,
   isSingles: isSingles, fmt: fmt, fmtLabel: fmtLabel, assignPools: assignPools, poolsOf: poolsOf,
-  build: build, gameIds: gameIds, standings: standings,
+  build: build, gameIds: gameIds, standings: standings, mixPlan: mixPlan, mixGenerate: mixGenerate,
   autoOrder: autoOrder, orderKeys: orderKeys, master: master, courtsOf: courtsOf
 };

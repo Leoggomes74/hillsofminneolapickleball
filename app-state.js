@@ -98,6 +98,14 @@ function types() { return S.db.eventTypes || []; }
 function typeOf(id) { return types().filter(function (x) { return x.id === id; })[0] || null; }
 function typeName(id) { var x = typeOf(id); return x ? x.name : "Event"; }
 function typeSingles(id) { var x = typeOf(id); return x ? !!x.singles : false; }
+// Individual round robin events are always one player per entry.
+function evSingle(e) { return !!e && (e.format === "mixer" || typeSingles(e.eventTypeId)); }
+function mixLink(e, key) {
+  var r = Math.max(1, Math.min(30, parseInt(e.mixRounds, 10) || 1)), g = parseInt(e.mixGames, 10) || 0, s2 = parseInt(e.mixSit, 10) || 0;
+  if (key === "mixSit") g = r - Math.max(0, Math.min(r - 1, s2));
+  g = Math.max(1, Math.min(r, g));
+  e.mixGames = g; e.mixSit = r - g;
+}
 function typeInUse(id) {
   return (S.db.tournaments || []).some(function (t) { return evsOf(t).some(function (e) { return e.eventTypeId === id; }); });
 }
@@ -211,6 +219,7 @@ function blankEvent(typeId) {
     id: null, eventTypeId: typeId || (types()[0] || {}).id || "mixed-doubles",
     date: "", time: "08:00",
     teamCount: 0, poolCount: 2, knockout: true, format: "pools", advancePerBracket: 1, thirdPlace: true,
+    mixRounds: 6, mixGames: 5, mixSit: 1,
     regOpen: true, maxTeams: 0,
     poolFormat: "to11win1", koFormat: "to11win2", finalFormat: "bo3to11",
     teams: []
@@ -274,8 +283,9 @@ function openEdit(id) {
       events: evsOf(t).map(function (e) {
         return {
           id: e.id, eventTypeId: e.eventTypeId, date: e.date || "", time: e.time || "",
-          teamCount: (e.teams || []).length, poolCount: e.poolCount || 1, knockout: e.knockout !== false, format: e.format === "elim" ? "elim" : "pools",
+          teamCount: (e.teams || []).length, poolCount: e.poolCount || 1, knockout: e.knockout !== false, format: e.format === "elim" || e.format === "mixer" ? e.format : "pools",
           advancePerBracket: e.advancePerBracket || 1,
+          mixRounds: e.mixRounds || 6, mixGames: e.mixGames || 5, mixSit: (e.mixRounds || 6) - (e.mixGames || 5),
           thirdPlace: e.thirdPlace != null ? !!e.thirdPlace : e.format !== "elim",
           regOpen: e.regOpen !== false, maxTeams: e.maxTeams || 0,
           poolFormat: e.poolFormat, koFormat: e.koFormat, finalFormat: e.finalFormat,
@@ -300,13 +310,19 @@ function formValid(f) {
     if (err) return;
     if (seen[e.eventTypeId]) { err = "Each event type can only be added once per tournament."; return; }
     seen[e.eventTypeId] = 1;
-    var single = typeSingles(e.eventTypeId), bad = 0;
+    var single = evSingle(e), bad = 0;
     filledRows(e).forEach(function (t) {
-      if (f.requireTeamName && !String(t.name).trim()) bad++;
+      if (f.requireTeamName && e.format !== "mixer" && !String(t.name).trim()) bad++;
       if (!String(t.players[0]).trim()) bad++;
       if (!single && !String(t.players[1]).trim()) bad++;
     });
-    if (bad) { err = typeName(e.eventTypeId) + ": " + (single ? "every entry needs a player." : "every team needs both players.") + (f.requireTeamName ? (single ? " and a name" : " and a team name") : ""); return; }
+    if (bad) { err = typeName(e.eventTypeId) + ": " + (single ? "every entry needs a player." : "every team needs both players.") + (f.requireTeamName && e.format !== "mixer" ? (single ? " and a name" : " and a team name") : ""); return; }
+    if (e.format === "mixer") {
+      var nm2 = {}, dupe = filledRows(e).some(function (t) { var k = String(t.players[0]).trim().toLowerCase(); if (nm2[k]) return true; nm2[k] = 1; });
+      if (dupe) { err = typeName(e.eventTypeId) + ": each player can only be entered once."; return; }
+      if (!e.regOpen && filledRows(e).length < 4) err = typeName(e.eventTypeId) + ": an individual round robin needs at least 4 players.";
+      return;
+    }
     if (e.regOpen) return;                       // registration will fill the pools
     var rows = filledRows(e);
     if (!rows.length) { err = typeName(e.eventTypeId) + ": add entries, or switch registration on so people can enter themselves."; return; }
@@ -334,15 +350,16 @@ function submitForm() {
     courtCount: parseInt(f.courtCount, 10) || 0,
     courtNames: (f.courtNames || []).map(function (n) { return String(n || "").trim(); }),
     events: f.events.map(function (e) {
-      var single = typeSingles(e.eventTypeId);
+      var single = evSingle(e);
       return {
         id: e.id, eventTypeId: e.eventTypeId, date: e.date || f.date, time: e.time || f.time,
-        poolCount: parseInt(e.poolCount, 10) || 1, knockout: !!e.knockout, format: e.format === "elim" ? "elim" : "pools",
+        poolCount: e.format === "mixer" ? 1 : (parseInt(e.poolCount, 10) || 1), knockout: e.format === "mixer" ? false : !!e.knockout, format: e.format === "elim" || e.format === "mixer" ? e.format : "pools",
+        mixRounds: parseInt(e.mixRounds, 10) || 6, mixGames: parseInt(e.mixGames, 10) || 5,
         advancePerBracket: parseInt(e.advancePerBracket, 10) || 1, thirdPlace: !!e.thirdPlace,
         regOpen: !!e.regOpen, maxTeams: parseInt(e.maxTeams, 10) || 0,
         poolFormat: e.poolFormat, koFormat: e.koFormat, finalFormat: e.finalFormat,
         teams: filledRows(e).map(function (t) {
-          return { name: t.name.trim(), pool: t.pool, registered: t.registered || 0, players: single ? [t.players[0].trim()] : [t.players[0].trim(), t.players[1].trim()] };
+          return { name: e.format === "mixer" ? t.players[0].trim() : t.name.trim(), pool: e.format === "mixer" ? 0 : t.pool, registered: t.registered || 0, players: single ? [t.players[0].trim()] : [t.players[0].trim(), t.players[1].trim()] };
         })
       };
     })
@@ -445,7 +462,7 @@ document.addEventListener("click", function (e) {
   if (act === "invshare") return shareInvite();
   if (act === "joinwait") {
     var tw = tour(), ew = ev(); if (!tw || !ew) return;
-    var sw = typeSingles(ew.eventTypeId), needNameW = tw.requireTeamName !== false;
+    var sw = evSingle(ew), needNameW = tw.requireTeamName !== false && ew.format !== "mixer";
     var wt = String(S.wl.team || "").trim(), w1 = String(S.wl.p1 || "").trim(), w2 = String(S.wl.p2 || "").trim();
     if ((needNameW && !wt) || !w1 || (!sw && !w2)) { toast(sw ? "Player name needed" : "Your name and partner needed"); return; }
     S.wlBusy = true; render();
@@ -556,6 +573,22 @@ document.addEventListener("click", function (e) {
       post({ action: "setOrder", tournamentId: ta.id, order: keys }, "Court order rebuilt");
     });
   }
+  if (act === "mixgen" || act === "mixgo") {
+    var tx = tour(), ex = ev(); if (!tx || !ex) return;
+    return needPin(function () {
+      var names = (ex.teams || []).map(function (p) { return (p.players || [])[0] || p.name; });
+      var res = TModel.mixGenerate(names, ex.mixRounds || 6, ex.mixGames || 5, TModel.courtsOf(tx).length);
+      if (res.error) { toast(res.error, 3600); return; }
+      var scored = Object.keys(ex.results || {}).filter(function (k) { return k.charAt(0) === "X"; }).length;
+      if (act === "mixgen" && scored) { S.mixAsk = scored; return render(); }
+      S.mixAsk = 0;
+      ex.mixSched = { rounds: res.rounds, at: Date.now() };
+      Object.keys(ex.results || {}).forEach(function (k) { if (k.charAt(0) === "X") delete ex.results[k]; });
+      cacheDb(); render();
+      post({ action: "setMix", tournamentId: tx.id, eventId: ex.id, rounds: res.rounds }, "Matches drawn");
+    });
+  }
+  if (act === "mixcancel") { S.mixAsk = 0; return render(); }
   if (act === "schedscore") {
     var cut = val.indexOf("|");
     S.evId = val.slice(0, cut);
@@ -600,7 +633,8 @@ document.addEventListener("click", function (e) {
   }
   if (act === "setformat") {
     var pf = val.split(":"), evfmt = S.form.events[+pf[0]];
-    evfmt.format = pf[1] === "elim" ? "elim" : "pools";
+    evfmt.format = pf[1] === "elim" || pf[1] === "mixer" ? pf[1] : "pools";
+    if (evfmt.format === "mixer") { evfmt.poolCount = 1; evfmt.teams.forEach(function (x) { x.pool = 0; }); mixLink(evfmt, "mixRounds"); }
     return render();
   }
   if (act === "pool") {
@@ -639,7 +673,7 @@ document.addEventListener("click", function (e) {
   if (act === "teampool") { S.teamEdit.pool = +val; return render(); }
   if (act === "teamsave") {
     var ts = tour(), es = ev(), d = S.teamEdit; if (!ts || !es || !d) return;
-    var sg = typeSingles(es.eventTypeId), needN = ts.requireTeamName !== false;
+    var sg = evSingle(es), needN = ts.requireTeamName !== false && es.format !== "mixer";
     if ((needN && !String(d.name).trim()) || !String(d.p1).trim() || (!sg && !String(d.p2).trim())) { toast("Fill every field"); return; }
     S.teamEdit = null; render();
     post({ action: "updateTeam", tournamentId: ts.id, eventId: es.id, index: d.index,
@@ -656,7 +690,7 @@ document.addEventListener("click", function (e) {
 
   if (act === "register") {
     var tr = tour(), er = ev(); if (!tr || !er) return;
-    var sng = typeSingles(er.eventTypeId), needName = tr.requireTeamName !== false;
+    var sng = evSingle(er), needName = tr.requireTeamName !== false && er.format !== "mixer";
     var team = String(S.reg.team || "").trim(), p1 = String(S.reg.p1 || "").trim(), p2 = String(S.reg.p2 || "").trim();
     if ((needName && !team) || !p1 || (!sng && !p2)) { toast(sng ? "Player name needed" + (needName ? " (and entry name)" : "") : "Your name and partner needed" + (needName ? " (and team name)" : "")); return; }
     S.regBusy = true; render();
@@ -725,6 +759,7 @@ document.addEventListener("input", function (e) {
     if (key === "knockout" || key === "thirdPlace") { evf[key] = el.checked; return render(); }
     if (key === "regOpen") { evf.regOpen = el.checked; return render(); }
     if (key === "teamCount" || key === "poolCount") { evf[key] = el.value; syncTeamRows(evf); if (key === "poolCount") rebalance(evf); return render(); }
+    if (/^mix/.test(key)) { evf[key] = el.value; return; }
     evf[key] = el.value;
     if (key === "eventTypeId") return render();
     return;
@@ -750,6 +785,7 @@ document.addEventListener("change", function (e) {
   if (key === "regOpen") { evf.regOpen = el.checked; return render(); }
   if (key === "teamCount" || key === "poolCount") { evf[key] = el.value; syncTeamRows(evf); if (key === "poolCount") rebalance(evf); return render(); }
   evf[key] = el.value;
+  if (/^mix/.test(key)) mixLink(evf, key);
   render();
 });
 

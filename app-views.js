@@ -207,28 +207,38 @@ function viewForm() {
   } else if (f.step === 2) {
     h += '<div class="fnote top">One or more event types per tournament. Every event has its own start, pools, scoring formats and entry list.</div>';
     f.events.forEach(function (e, i) {
-      var single = typeSingles(e.eventTypeId);
+      var single = evSingle(e);
       h += '<div class="evcard"><div class="evhead"><b>Event ' + (i + 1) + '</b>' +
         (f.events.length > 1 ? '<button class="evdel" data-act="delev" data-val="' + i + '">Remove</button>' : '') + '</div>';
       h += '<div class="fsec"><label>Event type</label>' + selectEl("data-ef", i + ":eventTypeId", e.eventTypeId, typeOpts) + '</div>';
       h += '<div class="fsec two"><div><label>Date</label><input type="date" data-ef="' + i + ':date" value="' + esc(e.date) + '"></div>' +
         '<div><label>Start time</label><input type="time" data-ef="' + i + ':time" value="' + esc(e.time) + '"></div></div>';
-      h += '<div class="fsec two"><div><label>' + (single ? 'Players' : 'Teams') + ' now</label><input type="number" min="0" max="32" data-ef="' + i + ':teamCount" value="' + e.teamCount + '"></div>' +
-        '<div><label>' + (e.format === "elim" ? 'Brackets' : 'Pools') + '</label><input type="number" min="1" max="8" data-ef="' + i + ':poolCount" value="' + e.poolCount + '"></div></div>';
+      var isMix = e.format === "mixer", isElim = e.format === "elim", isPools = !isMix && !isElim;
+      if (isMix) h += '<div class="fsec"><label>Players now</label><input type="number" min="0" max="32" data-ef="' + i + ':teamCount" value="' + e.teamCount + '"></div>';
+      else h += '<div class="fsec two"><div><label>' + (single ? 'Players' : 'Teams') + ' now</label><input type="number" min="0" max="32" data-ef="' + i + ':teamCount" value="' + e.teamCount + '"></div>' +
+        '<div><label>' + (isElim ? 'Brackets' : 'Pools') + '</label><input type="number" min="1" max="8" data-ef="' + i + ':poolCount" value="' + e.poolCount + '"></div></div>';
       h += '<div class="fsec check"><label><input type="checkbox" data-ef="' + i + ':regOpen"' + (e.regOpen ? ' checked' : '') + '> Let people register themselves</label>' +
         '<div class="fnote">' + (e.regOpen
-          ? 'Anyone can add their team on the Teams page — no passcode. Entries drop into the emptiest pool and you can edit or remove them here afterwards.'
+          ? (isMix ? 'Players sign up one by one on the Players page — no passcode, no partner needed.' : 'Anyone can add their team on the Teams page — no passcode. Entries drop into the emptiest pool and you can edit or remove them here afterwards.')
           : 'Closed — only you can add entries, on the next step.') + '</div></div>';
       if (e.regOpen) {
         h += '<div class="fsec"><label>Maximum entries (0 = no limit)</label><input type="number" min="0" max="32" data-ef="' + i + ':maxTeams" value="' + (e.maxTeams || 0) + '"></div>';
       }
       h += '<div class="fsec"><label>Format</label><div class="pools">' +
-        '<button type="button" class="pbtn wide' + (e.format !== "elim" ? ' on' : '') + '" data-act="setformat" data-val="' + i + ':pools">Pool play' + (e.format !== "elim" ? " + knockout" : "") + '</button>' +
-        '<button type="button" class="pbtn wide' + (e.format === "elim" ? ' on' : '') + '" data-act="setformat" data-val="' + i + ':elim">Single elimination</button></div>' +
-        '<div class="fnote">' + (e.format === "elim"
+        '<button type="button" class="pbtn wide' + (isPools ? ' on' : '') + '" data-act="setformat" data-val="' + i + ':pools">Pool play' + (isPools ? " + knockout" : "") + '</button>' +
+        '<button type="button" class="pbtn wide' + (isElim ? ' on' : '') + '" data-act="setformat" data-val="' + i + ':elim">Single elimination</button>' +
+        '<button type="button" class="pbtn wide' + (isMix ? ' on' : '') + '" data-act="setformat" data-val="' + i + ':mixer">Individual round robin</button></div>' +
+        '<div class="fnote">' + (isElim
           ? 'Straight knockout from the first round — one loss and you\u2019re out. No round robin.'
+          : isMix ? 'Players register on their own. The app draws random partners and opponents every round, and players are ranked individually.'
           : 'Round robin pools, then a knockout stage to decide the placings.') + '</div></div>';
-      if (e.format === "elim") {
+      if (isMix) {
+        h += '<div class="fsec two" style="grid-template-columns:1fr 1fr 1fr"><div><label>Rounds</label><input type="number" min="1" max="30" data-ef="' + i + ':mixRounds" value="' + esc(String(e.mixRounds)) + '"></div>' +
+          '<div><label>Games per player</label><input type="number" min="1" max="30" data-ef="' + i + ':mixGames" value="' + esc(String(e.mixGames)) + '"></div>' +
+          '<div><label>Rounds sitting out</label><input type="number" min="0" max="29" data-ef="' + i + ':mixSit" value="' + esc(String(e.mixSit)) + '"></div></div>';
+        h += '<div class="fnote">' + mixBlurb(e.teamCount, e.mixRounds, e.mixGames, f.courtCount) + '</div>';
+        h += '<div class="fsec last"><label>Game format</label>' + selectEl("data-ef", i + ":poolFormat", e.poolFormat, fmtOpts) + '</div>';
+      } else if (isElim) {
         h += '<div class="fnote">' + (e.teamCount ? e.teamCount + ' ' + (single ? 'players' : 'teams') : 'No entries yet') + ' across ' + e.poolCount + ' bracket' + (e.poolCount > 1 ? 's' : '') +
           (e.teamCount ? ' — ' + elimMatchCount(e) + ' matches to a champion.' : ' — the draw builds itself as people register.') + '</div>';
         if (e.poolCount > 1) {
@@ -265,7 +275,7 @@ function viewForm() {
   } else {
     h += '<div class="fnote top">Optional — leave an event empty and players will register themselves. Tap a pool letter to move an entry.</div>';
     f.events.forEach(function (e, ei) {
-      var single = typeSingles(e.eventTypeId);
+      var single = evSingle(e);
       var poolOpts = [];
       for (var p = 0; p < e.poolCount; p++) poolOpts.push(p);
       h += '<div class="bar"><h2>' + esc(typeName(e.eventTypeId)) + '</h2><div class="meta">' + e.teams.length + (single ? ' players' : ' teams') +
@@ -274,7 +284,7 @@ function viewForm() {
       e.teams.forEach(function (t, i) {
         h += '<div class="trow2"><div class="tnum">' + (i + 1) + (t.registered ? '<b class="regdot" title="Self-registered">●</b>' : '') + '</div>' +
           '<div class="tfields">' +
-            (f.requireTeamName ? '<input type="text" data-team="' + ei + ':' + i + ':name" value="' + esc(t.name) + '" placeholder="' + (single ? 'Entry name' : 'Team name') + '">' : '') +
+            (f.requireTeamName && e.format !== "mixer" ? '<input type="text" data-team="' + ei + ':' + i + ':name" value="' + esc(t.name) + '" placeholder="' + (single ? 'Entry name' : 'Team name') + '">' : '') +
             '<div class="pgrid' + (single ? ' one' : '') + '">' +
               '<input type="text" data-team="' + ei + ':' + i + ':p:0" value="' + esc(t.players[0]) + '" placeholder="' + (single ? 'Player' : 'Player 1') + '">' +
               (single ? '' : '<input type="text" data-team="' + ei + ':' + i + ':p:1" value="' + esc(t.players[1]) + '" placeholder="Player 2">') +
@@ -298,6 +308,15 @@ function viewForm() {
   return h;
 }
 
+function mixBlurb(n, R, G, C) {
+  n = parseInt(n, 10) || 0; C = parseInt(C, 10) || 0;
+  var p = TModel.mixPlan(n, R, G, C);
+  var s = 'Each player plays ' + p.G + ' game' + (p.G === 1 ? '' : 's') + ' and sits out ' + p.S + ' of ' + p.R + ' rounds.';
+  if (!n) return s + ' The draw is made from the Rounds tab once players are in.';
+  if (p.error) return s + ' <b style="color:var(--red,#b00)">' + esc(p.error) + '</b>';
+  return s + ' With ' + n + ' players that is ' + p.total + ' games, up to ' + Math.max.apply(null, p.perRound) + ' per round' + (C ? ' on ' + C + ' court' + (C === 1 ? '' : 's') : '') + '.' +
+    (p.short ? ' ' + p.short + ' player' + (p.short === 1 ? ' gets' : 's get') + ' one game fewer, because the slots don\u2019t divide evenly into foursomes.' : '');
+}
 function roundRobinCount(e) {
   var pools = TModel.assignPools(e.teamCount, e.poolCount), counts = {};
   pools.forEach(function (p) { counts[p] = (counts[p] || 0) + 1; });
@@ -354,7 +373,7 @@ function viewEvent() {
       '<div class="empty">This tournament has no event types yet. Use ⋯ → Edit setup &amp; events to add one.</div>';
   }
   var v = TModel.build(e), h = "";
-  var single = typeSingles(e.eventTypeId);
+  var single = evSingle(e);
   var sub = esc(typeName(e.eventTypeId)) + ' · ' + (e.teams || []).length + (single ? ' players' : ' teams') + (t.locked ? ' · Locked' : '');
   h += '<div class="hd"><button class="back" data-act="home">‹</button><div class="hdmain"><h1>' + esc(t.name) + '</h1><div class="sub">' + sub + '</div></div>' +
     '<div class="tools">' + (v.live.length ? '<div class="livechip"><i></i><span>LIVE</span></div>' : '') +
@@ -372,6 +391,8 @@ function viewEvent() {
   if (S.tab === "now") h += tabNow(t, e, v);
   if (S.tab === "sched") h += tabSched(t, e, v);
   if (S.tab === "groups") h += tabGroups(t, e, v);
+  if (S.tab === "rounds") h += tabRounds(t, e, v);
+  if (S.tab === "standings") h += tabStandings(t, e, v);
   if (S.tab === "bracket") h += tabBracket(t, e, v);
   if (S.tab === "teams") h += tabTeams(t, e, v);
   if (S.tab === "recap") h += tabRecap(t, e, v);
@@ -379,7 +400,8 @@ function viewEvent() {
   if (S.tab === "info") h += tabInfo(t, e, v);
 
   var tabs = [["now", "Now"], ["sched", "Order"], ["groups", "Groups"], ["bracket", "Bracket"], ["teams", "Teams"], ["recap", "Recap"], ["notes", "Say"], ["info", "Info"]];
-  if (e.format === "elim") tabs = tabs.filter(function (x) { return x[0] !== "groups"; });
+  if (e.format === "mixer") tabs = [["now", "Now"], ["sched", "Order"], ["rounds", "Rounds"], ["standings", "Standings"], ["teams", "Players"], ["recap", "Recap"], ["notes", "Say"], ["info", "Info"]];
+  else if (e.format === "elim") tabs = tabs.filter(function (x) { return x[0] !== "groups"; });
   else if (!e.knockout) tabs = tabs.filter(function (x) { return x[0] !== "bracket"; });
   h += '<div class="nav"><div style="grid-template-columns:repeat(' + tabs.length + ',1fr)">' +
     tabs.map(function (x) {
@@ -435,6 +457,7 @@ function gLabel(m) {
 }
 function shortStage(m) {
   if (m.stage === "pool") return "Group " + L(m.pool);
+  if (m.stage === "mix") return "Round " + m.round;
   if (m.stage === "elimR") return m.stageLabel;
   if (m.stage === "sf") return "Semifinal";
   if (m.stage === "bronze") return "Third place";
@@ -495,7 +518,7 @@ function viewRoster() {
     return h;
   }
   list.forEach(function (x) {
-    var single = typeSingles(x.eventTypeId), teams = x.teams || [], pc = Math.max(1, x.poolCount || 1);
+    var single = evSingle(x), teams = x.teams || [], pc = Math.max(1, x.poolCount || 1);
     h += '<div class="rsec"><div class="rh"><b>' + esc(typeName(x.eventTypeId)) + '</b>' +
       '<span>' + esc(when(x)) + ' · ' + teams.length + ' ' + (single ? 'player' : 'team') + (teams.length === 1 ? '' : 's') + '</span></div>';
     if (!teams.length) { h += '<div class="rnone">No entries yet.</div></div>'; return; }
@@ -941,27 +964,75 @@ function tabElim(t, e, v) {
   return h;
 }
 
+function tabRounds(t, e, v) {
+  var n = (e.teams || []).length, courts = TModel.courtsOf(t).length;
+  var p = TModel.mixPlan(n, e.mixRounds || 6, e.mixGames || 5, courts), mx = v.mix;
+  var h = '<div class="bar"><h2>Rounds</h2><div class="meta">' + p.R + ' rounds · ' + p.G + ' games each</div></div>';
+  h += '<div class="fnote top">' + mixBlurb(n, p.R, p.G, courts) + '</div>';
+  if (mx.stale) h += '<div class="note"><div class="k">Player list changed</div><p>Some players were added or removed after the draw. Reshuffle so everyone is included.</p></div>';
+  if (!t.locked) {
+    if (S.mixAsk) {
+      h += '<div class="note"><div class="k">Reshuffle?</div><p>A new draw replaces every match and clears ' + S.mixAsk + ' recorded score' + (S.mixAsk === 1 ? '' : 's') + '.</p></div>' +
+        '<div class="facts"><button class="fbtn ghost" data-act="mixcancel">Cancel</button><button class="fbtn" data-act="mixgo">Reshuffle</button></div>';
+    } else if (!p.error) {
+      h += '<button class="fbtn wide" data-act="mixgen">' + (mx.rounds.length ? 'Reshuffle matches' : 'Draw matches') + '</button>';
+    }
+  }
+  if (!mx.rounds.length) return h + '<div class="empty">' + (p.error ? esc(p.error) : 'No matches yet. Once players have registered, draw the matches — organizer passcode required.') + '</div><div class="pad"></div>';
+  mx.rounds.forEach(function (rd) {
+    var done = rd.matches.filter(function (m) { return m.status === "done"; }).length;
+    h += '<div class="lbl rule">Round ' + rd.no + ' · ' + done + '/' + rd.matches.length + ' played</div>';
+    rd.matches.forEach(function (m) { h += matchRow(m, "mrow"); });
+    if (rd.sit.length) h += '<div class="empty small">Sitting out: ' + rd.sit.map(esc).join(', ') + '</div>';
+  });
+  return h + '<div class="pad"></div>';
+}
+function mixTable(rows, final) {
+  var cols = 'grid-template-columns:22px minmax(0,1fr) 26px 26px 34px 34px 40px';
+  var h = '<div class="lbl rule">' + (final ? 'Final standings' : 'Standings') + '</div>' +
+    '<div class="mini h" style="' + cols + '"><div>#</div><div>Player</div><div class="r">W</div><div class="r">L</div><div class="r">PW</div><div class="r">PL</div><div class="r">Diff</div></div>';
+  rows.forEach(function (r) {
+    h += '<div class="mini' + (r.pos <= 3 && r.g ? ' adv' : '') + '" style="' + cols + '"><div>' + r.pos + '</div><div class="t">' + esc(r.player) + '</div>' +
+      '<div class="r">' + r.w + '</div><div class="r">' + r.l + '</div><div class="r">' + r.pf + '</div><div class="r">' + r.pa + '</div><div class="r">' + r.diff + '</div></div>';
+  });
+  return h + '<div class="empty small">Ranked by wins, then fewest losses, then point differential, then points won. PW = points won, PL = points lost.</div>';
+}
+function mixPodium(e, v) {
+  var tb = v.mix.table, fin = v.mix.finished;
+  if (!tb.length || !v.done.length) return '';
+  var rec = function (r) { return r.rec + ' · ' + r.diff; };
+  return '<div class="podium"><div class="top"><div class="lbl">' + (fin ? '★ 1st place · ' + esc(typeName(e.eventTypeId)) : 'Leading so far') + '</div><div class="nm">' + esc(tb[0].player) + '</div><div class="pl">' + rec(tb[0]) + '</div></div>' +
+    (tb[1] ? '<div class="row"><div><div class="p">' + (fin ? '2nd place' : '2nd') + '</div><div class="t">' + esc(tb[1].player) + '</div></div><b>' + rec(tb[1]) + '</b></div>' : '') +
+    (tb[2] ? '<div class="row"><div><div class="p">' + (fin ? '3rd place' : '3rd') + '</div><div class="t">' + esc(tb[2].player) + '</div></div><b>' + rec(tb[2]) + '</b></div>' : '') + '</div>';
+}
+function tabStandings(t, e, v) {
+  var h = '<div class="bar"><h2>Standings</h2><div class="meta">' + v.done.length + ' of ' + v.scheduled + ' games</div></div>';
+  if (!v.mix.table.length) return h + '<div class="empty">No players yet.</div><div class="pad"></div>';
+  h += mixPodium(e, v);
+  if (!v.mix.finished) h += '<div class="fnote top">Placings are provisional until every game is scored.</div>';
+  return h + mixTable(v.mix.table, v.mix.finished) + '<div class="pad"></div>';
+}
 function tabTeams(t, e, v) {
-  var single = typeSingles(e.eventTypeId);
+  var single = evSingle(e);
   var n = (e.teams || []).length, cap = e.maxTeams || 0;
   var open = e.regOpen !== false && !t.locked && t.regActive !== false && (!cap || n < cap);
-  var h = '<div class="bar"><h2>' + (single ? 'Players' : 'Teams') + '</h2><div class="meta">' + n + (cap ? ' of ' + cap : '') + ' · ' + e.poolCount + (e.format === "elim" ? ' bracket' : ' pool') + (e.poolCount > 1 ? 's' : '') + '</div></div>';
+  var h = '<div class="bar"><h2>' + (single ? 'Players' : 'Teams') + '</h2><div class="meta">' + n + (cap ? ' of ' + cap : '') + (e.format === "mixer" ? ' · individual' : ' · ' + e.poolCount + (e.format === "elim" ? ' bracket' : ' pool') + (e.poolCount > 1 ? 's' : '')) + '</div></div>';
   if (t.regActive === false) h += '<div class="empty small">Registration is currently closed for this tournament.</div>';
 
   if (open) {
     h += '<div class="regbox"><div class="regh">Register for ' + esc(typeName(e.eventTypeId)) + '</div>' +
       '<div class="regsub">' + esc(when(e)) + ' · no passcode needed' + (cap ? ' · ' + (cap - n) + ' place' + (cap - n === 1 ? '' : 's') + ' left' : '') + '</div>' +
       (t.fee ? '<div class="regfee">Entry fee · <b>' + esc(t.fee) + '</b></div>' : '') +
-      (t.requireTeamName === false ? '' : '<div class="fsec"><label>' + (single ? 'Entry name' : 'Team name') + '</label><input type="text" data-reg="team" value="' + esc(S.reg.team) + '" placeholder="' + (single ? 'How should we list you?' : 'What is your team called?') + '" maxlength="40"></div>') +
+      (t.requireTeamName === false || e.format === "mixer" ? '' : '<div class="fsec"><label>' + (single ? 'Entry name' : 'Team name') + '</label><input type="text" data-reg="team" value="' + esc(S.reg.team) + '" placeholder="' + (single ? 'How should we list you?' : 'What is your team called?') + '" maxlength="40"></div>') +
       '<div class="fsec"><label>Your name</label><input type="text" data-reg="p1" value="' + esc(S.reg.p1) + '" placeholder="First and last name" maxlength="40"></div>' +
       (single ? '' : '<div class="fsec"><label>Partner name</label><input type="text" data-reg="p2" value="' + esc(S.reg.p2) + '" placeholder="First and last name" maxlength="40"></div>') +
       '<button class="fbtn wide"' + (S.regBusy ? ' disabled' : '') + ' data-act="register">' + (S.regBusy ? 'Registering\u2026' : 'Register') + '</button>' +
-      '<div class="fnote">You go straight into the draw and the emptiest pool.' + (t.fee ? ' The ' + esc(t.fee) + ' entry fee is payable to the Tournament Organization.' : '') + ' Organizers can correct any detail afterwards.</div></div>';
+      '<div class="fnote">' + (e.format === "mixer" ? 'You\u2019re added to the player list; partners are drawn at random once registration closes.' : 'You go straight into the draw and the emptiest pool.') + (t.fee ? ' The ' + esc(t.fee) + ' entry fee is payable to the Tournament Organization.' : '') + ' Organizers can correct any detail afterwards.</div></div>';
   } else if (e.regOpen !== false && cap && n >= cap && !t.locked && t.regActive !== false) {
     var wq = e.waitlist || [];
     h += '<div class="regbox wlbox"><div class="regh">Waitlist · ' + esc(typeName(e.eventTypeId)) + '</div>' +
       '<div class="regsub">Event full · all ' + cap + ' spots taken · ' + wq.length + ' waiting</div>' +
-      (t.requireTeamName === false ? '' : '<div class="fsec"><label>' + (single ? 'Entry name' : 'Team name') + '</label><input type="text" data-wl="team" value="' + esc(S.wl.team) + '" placeholder="' + (single ? 'How should we list you?' : 'What is your team called?') + '" maxlength="40"></div>') +
+      (t.requireTeamName === false || e.format === "mixer" ? '' : '<div class="fsec"><label>' + (single ? 'Entry name' : 'Team name') + '</label><input type="text" data-wl="team" value="' + esc(S.wl.team) + '" placeholder="' + (single ? 'How should we list you?' : 'What is your team called?') + '" maxlength="40"></div>') +
       '<div class="fsec"><label>Your name</label><input type="text" data-wl="p1" value="' + esc(S.wl.p1) + '" placeholder="First and last name" maxlength="40"></div>' +
       (single ? '' : '<div class="fsec"><label>Partner name</label><input type="text" data-wl="p2" value="' + esc(S.wl.p2) + '" placeholder="First and last name" maxlength="40"></div>') +
       '<button class="fbtn wide"' + (S.wlBusy ? ' disabled' : '') + ' data-act="joinwait">' + (S.wlBusy ? 'Joining\u2026' : 'Join the waitlist') + '</button>' +
@@ -974,7 +1045,16 @@ function tabTeams(t, e, v) {
   }
   var idxOf = {};
   (e.teams || []).forEach(function (x, i) { idxOf[x.name] = i; });
-  if (e.format === "elim") {
+  if (e.format === "mixer") {
+    var recOf = {};
+    (v.mix ? v.mix.table : []).forEach(function (r) { recOf[r.player] = r; });
+    (e.teams || []).forEach(function (x, i) {
+      var pn = (x.players || [])[0] || x.name, r = recOf[pn];
+      h += '<div class="team"><div><div class="n">' + esc(pn) + '</div>' + (r && r.g ? '<div class="p">' + r.g + ' played · ' + r.pf + '\u2013' + r.pa + ' points</div>' : '') + '</div>' +
+        '<div class="r">' + (r && r.g ? r.rec : '') + '</div>' +
+        (t.locked ? '' : '<button class="tedit" data-act="editteam" data-val="' + i + '">Edit</button>') + '</div>';
+    });
+  } else if (e.format === "elim") {
     var pcB = Math.max(1, e.poolCount || 1);
     for (var bi = 0; bi < pcB; bi++) {
       var inB = (e.teams || []).filter(function (x) { return (x.pool || 0) === bi; });
@@ -1029,6 +1109,15 @@ function tabRecap(t, e, v) {
   (e.teams || []).forEach(function (x) { names[x.name] = players(x.players); });
   var pts = 0;
   v.done.forEach(function (m) { pts += m.ptsA + m.ptsB; });
+  if (e.format === "mixer") {
+    h += mixPodium(e, v);
+    h += '<div class="kpi"><div><b>' + v.done.length + '</b><span>Games played</span></div><div><b>' + pts + '</b><span>Points scored</span></div>' +
+      '<div><b>' + (v.done.length ? (pts / v.done.length).toFixed(1) : "0") + '</b><span>Avg points per game</span></div>' +
+      '<div><b>' + (e.teams || []).length + '</b><span>Players</span></div></div>';
+    h += mixTable(v.mix.table, v.mix.finished);
+    h += '<div class="hl thanks"><div>Thank you to all ' + (e.teams || []).length + ' players in the ' + esc(typeName(e.eventTypeId)) + ' — ' + v.done.length + ' games played with new partners every round.</div></div>';
+    return h + '<div class="pad"></div>';
+  }
   if (e.format === "elim") {
     h += '<div class="kpi"><div><b>' + v.done.length + '</b><span>Matches played</span></div><div><b>' + pts + '</b><span>Points scored</span></div>' +
       '<div><b>' + (v.done.length ? (pts / v.done.length).toFixed(1) : "0") + '</b><span>Avg points per match</span></div>' +
@@ -1131,7 +1220,7 @@ function tabNotes(t, e, v) {
 }
 
 function tabInfo(t, e, v) {
-  var single = typeSingles(e.eventTypeId);
+  var single = evSingle(e);
   var counts = v.tables.map(function (r, i) { return r.length + ' in ' + L(i); });
   var evs = evsOf(t);
   var h = '<div class="bar"><h2>Format &amp; rules</h2></div>';
@@ -1147,25 +1236,31 @@ function tabInfo(t, e, v) {
     var xv = TModel.build(x);
     h += '<div class="erow' + (x.id === e.id ? ' on' : '') + '"><div><div class="en">' + esc(typeName(x.eventTypeId)) + '</div>' +
       '<div class="ed">' + esc(when(x)) + '</div>' +
-      '<div class="ed">' + (x.teams || []).length + (typeSingles(x.eventTypeId) ? ' players' : ' teams') + ' · ' + x.poolCount + (x.format === "elim" ? ' bracket' : ' pool') + (x.poolCount > 1 ? 's' : '') +
-      ' · ' + (x.format === "elim" ? 'single elimination' : (x.knockout ? 'knockout' : 'pool play only')) +
+      '<div class="ed">' + (x.teams || []).length + (evSingle(x) ? ' players' : ' teams') + ' · ' + x.poolCount + (x.format === "elim" ? ' bracket' : ' pool') + (x.poolCount > 1 ? 's' : '') +
+      ' · ' + (x.format === "mixer" ? 'individual round robin' : x.format === "elim" ? 'single elimination' : (x.knockout ? 'knockout' : 'pool play only')) +
       (x.regOpen !== false && !t.locked ? ' · <b style="color:var(--green)">entries open</b>' : '') + '</div></div>' +
       '<div class="ep">' + xv.done.length + '/' + xv.scheduled + '</div></div>';
   });
   h += sec("This event", esc(typeName(e.eventTypeId)) + ' — ' + esc(when(e)) + '. ' +
     (e.teams || []).length + ' ' + (single ? 'players' : 'teams') +
-    (e.format === "elim"
+    (e.format === "mixer"
+      ? ' playing individually over ' + (e.mixRounds || 6) + ' rounds: ' + (e.mixGames || 5) + ' games each, partners and opponents drawn at random every round.'
+      : e.format === "elim"
       ? (v.elim.length > 1 ? ' across ' + v.elim.length + ' brackets' : ' in a single bracket') + '. Single elimination — one loss and you\u2019re out: ' + v.scheduled + ' matches to a champion' + (v.elim.length > 1 ? ' per bracket' : '') + '.'
       : (v.tables.length > 1 ? ' in ' + v.tables.length + ' pools (' + counts.join(', ') + ')' : ' in a single pool') +
         '. Everyone plays everyone in their pool: ' + v.pool.length + ' pool matches' + (e.knockout ? ' plus ' + (v.ko && !v.ko.bronze ? 'three' : 'four') + ' knockout matches' : '') + '.'));
   h += '<div class="secwrap">';
-  h += sec("Scoring", e.format === "elim"
+  h += sec("Scoring", e.format === "mixer"
+    ? 'Every game: ' + TModel.fmtLabel(e.poolFormat).toLowerCase() + '. Both partners get the result and the points of the game. Traditional side-out scoring — only the serving team scores.'
+    : e.format === "elim"
     ? 'Early rounds: ' + TModel.fmtLabel(e.koFormat).toLowerCase() + '. Final: ' + TModel.fmtLabel(e.finalFormat).toLowerCase() + '.' +
       ' Traditional side-out scoring — only the serving team scores. Call the score out loud before every serve.'
     : 'Pool games: ' + TModel.fmtLabel(e.poolFormat).toLowerCase() + '.' +
     (e.knockout ? (v.ko && !v.ko.bronze ? ' Semifinals: ' : ' Semifinals and third place: ') + TModel.fmtLabel(e.koFormat).toLowerCase() + '. Final: ' + TModel.fmtLabel(e.finalFormat).toLowerCase() + '.' : '') +
     ' Traditional side-out scoring — only the serving team scores. Call the score out loud before every serve.');
-  h += sec("Advancing", e.format === "elim"
+  h += sec(e.format === "mixer" ? "Placings" : "Advancing", e.format === "mixer"
+    ? 'Players are ranked individually by wins, then fewest losses, then point differential (points won minus points lost), then points won. The top three take 1st, 2nd and 3rd place.'
+    : e.format === "elim"
     ? 'Single elimination — lose once and you\u2019re out. Byes go to the top seeds when a bracket isn\u2019t a clean power of two.'
     : knockoutBlurb({ knockout: e.knockout, poolCount: v.tables.length, thirdPlace: !!(v.ko && v.ko.bronze) }) +
     ' Ties break on head-to-head, then point differential, then points scored.');
@@ -1215,7 +1310,7 @@ function pairRow(i, side, name, val) {
 function teamSheet() {
   var t = tour(), e = ev(), d = S.teamEdit;
   if (!t || !e || !d) return "";
-  var single = typeSingles(e.eventTypeId), pc = Math.max(1, e.poolCount || 1);
+  var single = evSingle(e), pc = Math.max(1, e.poolCount || 1);
   var pools = '';
   if (pc > 1) {
     var i, btns = '';
@@ -1225,7 +1320,7 @@ function teamSheet() {
   }
   return '<div class="back2" data-act="teamclose" data-back="1"><div class="sheet">' +
     '<div class="h"><b>Edit entry · ' + esc(typeName(e.eventTypeId)) + '</b><button data-act="teamclose">CLOSE</button></div>' +
-    (t.requireTeamName === false ? '' : '<div class="fsec"><label>' + (single ? 'Entry name' : 'Team name') + '</label><input type="text" data-tform="name" value="' + esc(d.name) + '" maxlength="40"></div>') +
+    (t.requireTeamName === false || e.format === "mixer" ? '' : '<div class="fsec"><label>' + (single ? 'Entry name' : 'Team name') + '</label><input type="text" data-tform="name" value="' + esc(d.name) + '" maxlength="40"></div>') +
     '<div class="fsec"><label>' + (single ? 'Player' : 'Player 1') + '</label><input type="text" data-tform="p1" value="' + esc(d.p1) + '" maxlength="40"></div>' +
     (single ? '' : '<div class="fsec"><label>Player 2</label><input type="text" data-tform="p2" value="' + esc(d.p2) + '" maxlength="40"></div>') +
     pools +
