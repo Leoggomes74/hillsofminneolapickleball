@@ -1,6 +1,7 @@
 // State, API access, routing, event handling.
 var API = "/api/data";
 var PASSCODE = "2074";
+var SCORE_PASSCODE = "202610"; // score entry only
 var LKEY = "hom.db";
 var CLOUD = location.protocol !== "file:";
 
@@ -12,7 +13,7 @@ var S = {
   db: { tournaments: [], eventTypes: [], defaultId: null },
   sync: CLOUD ? "loading" : "local",
   toast: "",
-  unlocked: false, pinUsed: "", gate: null, gateThen: null, pin: "", bad: false,
+  unlocked: false, scorer: false, gateScore: false, pinUsed: "", gate: null, gateThen: null, pin: "", bad: false,
   editing: null, draft: [],
   menu: null,
   form: null,
@@ -31,7 +32,7 @@ var S = {
 };
 
 try { S.unlocked = sessionStorage.getItem("hom.unlocked") === "1"; } catch (e) {}
-try { S.pinUsed = sessionStorage.getItem("hom.pin") || ""; } catch (e) {}
+try { S.pinUsed = sessionStorage.getItem("hom.pin") || ""; S.scorer = sessionStorage.getItem("hom.role") === "score"; } catch (e) {}
 try { var c = localStorage.getItem(LKEY); if (c) S.db = JSON.parse(c); } catch (e) {}
 
 // ---- shape guards ----------------------------------------------------------
@@ -129,7 +130,7 @@ function post(payload, okMsg) {
   if (payload.action !== "note" && payload.action !== "waitlist") payload.pin = S.pinUsed || "";
   return fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
     .then(function (r) {
-      if (r.status === 401) { S.unlocked = false; S.pinUsed = ""; try { sessionStorage.removeItem("hom.unlocked"); sessionStorage.removeItem("hom.pin"); } catch (e) {} throw new Error("passcode"); }
+      if (r.status === 401) { S.unlocked = false; S.scorer = false; S.pinUsed = ""; try { sessionStorage.removeItem("hom.unlocked"); sessionStorage.removeItem("hom.pin"); sessionStorage.removeItem("hom.role"); } catch (e) {} throw new Error("passcode"); }
       if (r.status === 409) return r.json().then(function (j) { throw new Error(j.error || "not allowed"); });
       if (!r.ok) throw new Error(r.status);
       return r.json();
@@ -150,22 +151,28 @@ function post(payload, okMsg) {
 }
 
 // ---- passcode gate ---------------------------------------------------------
-function needPin(then) {
+function needPin(then, scoreOk) {
   if (S.unlocked && S.pinUsed) { then(); return; }
-  S.gate = true; S.gateThen = then; S.pin = ""; S.bad = false; render();
+  if (scoreOk && S.scorer && S.pinUsed) { then(); return; }
+  S.gate = true; S.gateScore = !!scoreOk; S.gateThen = then; S.pin = ""; S.bad = false; render();
+}
+function grantPin(role) {
+  S.unlocked = role === "admin"; S.scorer = role === "score"; S.pinUsed = S.pin;
+  try { sessionStorage.setItem("hom.unlocked", S.unlocked ? "1" : "0"); sessionStorage.setItem("hom.pin", S.pin); sessionStorage.setItem("hom.role", role); } catch (e) {}
+  var then = S.gateThen; S.gate = null; S.gateThen = null; S.pin = "";
+  render(); if (then) then();
 }
 function pinKey(k) {
   if (S.bad) { S.pin = ""; S.bad = false; }
   if (k === "del") S.pin = S.pin.slice(0, -1);
-  else if (S.pin.length < 4) S.pin += k;
+  else if (S.pin.length < 6) S.pin += k;
   if (S.pin.length === 4) {
-    if (S.pin === PASSCODE) {
-      S.unlocked = true; S.pinUsed = S.pin;
-      try { sessionStorage.setItem("hom.unlocked", "1"); sessionStorage.setItem("hom.pin", S.pin); } catch (e) {}
-      var then = S.gateThen; S.gate = null; S.gateThen = null; S.pin = "";
-      render(); if (then) then(); return;
-    }
+    if (S.pin === PASSCODE) return grantPin("admin");
+    if (SCORE_PASSCODE.indexOf(S.pin) !== 0) S.bad = true;
+  } else if (S.pin.length === 6) {
+    if (S.pin === SCORE_PASSCODE && S.gateScore) return grantPin("score");
     S.bad = true;
+    if (S.pin === SCORE_PASSCODE) toast("Score-entry passcode can\u2019t change setup or registration", 2800);
   }
   render();
 }
@@ -180,7 +187,7 @@ function openSheet(id) {
     S.editing = id;
     S.draft = m.games.map(function (g) { return { a: g.a, b: g.b, played: g.status !== "upcoming" }; });
     render();
-  });
+  }, true);
 }
 function saveSheet(status) {
   var t = tour(), e = ev(); if (!t || !e) return;
