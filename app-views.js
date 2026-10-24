@@ -1366,7 +1366,7 @@ function gate() {
   return '<div class="back2" data-act="gateclose" data-back="1"><div class="sheet gate">' +
     '<div class="h"><b>' + (S.gateScore ? 'Passcode' : 'Organizer passcode') + '</b><button data-act="gateclose">CLOSE</button></div>' +
     '<div class="msg">' + (S.gateScore ? 'Enter the organizer or score-entry passcode to enter game results.' : 'Organizer passcode required. The score-entry passcode only enters game results.') + '</div>' +
-    '<div class="dots">' + (S.pin.length >= 4 && SCORE_PASSCODE.indexOf(S.pin) === 0 ? [0, 1, 2, 3, 4, 5] : [0, 1, 2, 3]).map(function (i) {
+    '<div class="dots">' + [0, 1, 2, 3].map(function (i) {
       return '<i class="' + (S.bad ? "bad" : (S.pin.length > i ? "on" : "")) + '"></i>';
     }).join('') + '</div>' +
     '<div class="keys">' + [1, 2, 3, 4, 5, 6, 7, 8, 9].map(function (n) {

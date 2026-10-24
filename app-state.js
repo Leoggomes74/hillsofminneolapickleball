@@ -1,7 +1,7 @@
 // State, API access, routing, event handling.
 var API = "/api/data";
 var PASSCODE = "2074";
-var SCORE_PASSCODE = "202610"; // score entry only
+var SCORE_PASSCODE = "2610"; // score entry only
 var LKEY = "hom.db";
 var CLOUD = location.protocol !== "file:";
 
@@ -165,11 +165,9 @@ function grantPin(role) {
 function pinKey(k) {
   if (S.bad) { S.pin = ""; S.bad = false; }
   if (k === "del") S.pin = S.pin.slice(0, -1);
-  else if (S.pin.length < 6) S.pin += k;
+  else if (S.pin.length < 4) S.pin += k;
   if (S.pin.length === 4) {
     if (S.pin === PASSCODE) return grantPin("admin");
-    if (SCORE_PASSCODE.indexOf(S.pin) !== 0) S.bad = true;
-  } else if (S.pin.length === 6) {
     if (S.pin === SCORE_PASSCODE && S.gateScore) return grantPin("score");
     S.bad = true;
     if (S.pin === SCORE_PASSCODE) toast("Score-entry passcode can\u2019t change setup or registration", 2800);
