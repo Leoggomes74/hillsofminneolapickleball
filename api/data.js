@@ -9,12 +9,12 @@
 //
 // Storage: Vercel KV / Upstash Redis REST API.
 // SCORE_PASSCODE gates every write except `note` (defaults to 2074).
-// RESULTS_PASSCODE (defaults to 202610) may only do score / clearScore.
+// RESULTS_PASSCODE (defaults to 2610) may only do score / clearScore.
 
 const URL_ = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
 const TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 const PIN = process.env.SCORE_PASSCODE || "2074";
-const SCORE_PIN = process.env.RESULTS_PASSCODE || "202610";   // game results only
+const SCORE_PIN = process.env.RESULTS_PASSCODE || "2610";   // game results only
 const DB_KEY = "hom:db";
 const STAMP_KEY = "hom:updated";
 const LEGACY_KEY = "hom2026:results";
