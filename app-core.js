@@ -493,15 +493,19 @@ function mixPlan(n, R, G, C) {
 function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), x = a[i]; a[i] = a[j]; a[j] = x; } return a; }
 // Random draw: who plays each round (balanced so everyone reaches their game
 // count), then partners/opponents chosen to avoid repeats as far as possible.
+// Games are also ordered so that a game never needs a player who is likely
+// still on court: with K courts, game #i starts as game #i-K finishes, so it
+// should share no players with the K-1 games just before it.
 function mixGenerate(names, R, G, C) {
   var plan = mixPlan(names.length, R, G, C);
   if (plan.error) return { error: plan.error };
+  var K = C > 0 ? C : plan.perRoundMax, W = Math.max(0, K - 1);
   var best = null;
   for (var attempt = 0; attempt < 40; attempt++) {
     var n = names.length, target = names.map(function () { return plan.G; });
     shuffle(names.map(function (x, i) { return i; })).slice(0, plan.short).forEach(function (i) { target[i]--; });
     var played = names.map(function () { return 0; }), sat = names.map(function () { return 0; });
-    var partner = {}, opp = {}, rounds = [], cost = 0, ok = true;
+    var partner = {}, opp = {}, rounds = [], cost = 0, ok = true, flat = [];
     var key = function (a, b) { return a < b ? a + "|" + b : b + "|" + a; };
     for (var r = 0; r < plan.R; r++) {
       var need = plan.perRound[r] * 4, left = plan.R - r;
@@ -512,12 +516,19 @@ function mixGenerate(names, R, G, C) {
       var pick = order.slice(0, need);
       if (pick.some(function (i) { return played[i] >= target[i]; })) ok = false;
       var bestR = null, bestC = 1e9;
-      for (var tr = 0; tr < 300; tr++) {
+      for (var tr = 0; tr < 600; tr++) {
         var p = shuffle(pick.slice()), c = 0, games = [];
         for (var g = 0; g < p.length; g += 4) {
           var A = [p[g], p[g + 1]], B = [p[g + 2], p[g + 3]];
           c += 20 * ((partner[key(A[0], A[1])] || 0) + (partner[key(B[0], B[1])] || 0));
           A.forEach(function (x) { B.forEach(function (y) { c += 3 * (opp[key(x, y)] || 0); }); });
+          // court-blocking: overlap with the games still likely in play
+          var four = [p[g], p[g + 1], p[g + 2], p[g + 3]], pos = flat.length + g / 4;
+          for (var d = 1; d <= W && pos - d >= 0; d++) {
+            var prev = pos - d < flat.length ? flat[pos - d] : null;
+            if (!prev) continue;
+            four.forEach(function (x) { if (prev.indexOf(x) !== -1) c += 12 * (W - d + 1); });
+          }
           games.push([A, B]);
         }
         if (c < bestC) { bestC = c; bestR = games; if (!c) break; }
@@ -529,6 +540,7 @@ function mixGenerate(names, R, G, C) {
         partner[key(B[0], B[1])] = (partner[key(B[0], B[1])] || 0) + 1;
         A.forEach(function (x) { B.forEach(function (y) { opp[key(x, y)] = (opp[key(x, y)] || 0) + 1; }); });
       });
+      bestR.forEach(function (gm) { flat.push(gm[0].concat(gm[1])); });
       var inR = {}; pick.forEach(function (i) { inR[i] = 1; played[i]++; });
       names.forEach(function (x, i) { sat[i] = inR[i] ? 0 : sat[i] + 1; });
       rounds.push(bestR.map(function (gm) { return { a: [names[gm[0][0]], names[gm[0][1]]], b: [names[gm[1][0]], names[gm[1][1]]] }; }));
