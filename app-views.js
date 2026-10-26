@@ -257,7 +257,15 @@ function viewForm() {
       var single = evSingle(e);
       h += '<div class="evcard"><div class="evhead"><b>Event ' + (i + 1) + '</b>' +
         (f.events.length > 1 ? '<button class="evdel" data-act="delev" data-val="' + i + '">Remove</button>' : '') + '</div>';
-      h += '<div class="fsec"><label>Event type</label>' + selectEl("data-ef", i + ":eventTypeId", e.eventTypeId, typeOpts) + '</div>';
+      h += '<div class="fsec"><label>Event type</label>' + selectEl("data-ef", i + ":eventTypeId", e.eventTypeId, typeOpts) +
+        '<button type="button" class="tbtn" style="margin-top:8px" data-act="formnewtype" data-val="' + i + '">' + (S.formType && S.formType.ev === i ? 'Cancel' : '+ Add event type') + '</button>';
+      if (S.formType && S.formType.ev === i) {
+        h += '<div class="regbox" style="margin:10px 0 0;padding:12px">' +
+          '<div class="fsec" style="padding:0"><label>Event type name</label><input type="text" data-ft="name" value="' + esc(S.formType.name) + '" maxlength="40" placeholder="e.g. Women\u2019s Doubles 3.5"></div>' +
+          '<label class="chk" style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" data-ft="singles"' + (S.formType.singles ? ' checked' : '') + '> Singles (one player per entry)</label>' +
+          '<button type="button" class="fbtn" style="margin-top:10px;width:100%" data-act="formaddtype">Add and select</button></div>';
+      }
+      h += '</div>';
       h += '<div class="fsec two"><div><label>Date</label><input type="date" data-ef="' + i + ':date" value="' + esc(e.date) + '"></div>' +
         '<div><label>Start time</label><input type="time" data-ef="' + i + ':time" value="' + esc(e.time) + '"></div></div>';
       var isMix = e.format === "mixer", isElim = e.format === "elim", isPools = !isMix && !isElim;
@@ -541,6 +549,7 @@ function viewHelp() {
   h += sec("Organizers", '<p>The organizer passcode unlocks everything:</p><ul class="hlplist">' +
     '<li><b>Create / Edit setup</b> \u2014 step 1 has the tournament name, director, dates and times, courts, registration on/off, results passcode, address (street, city, state, zip), contact phone and email. Steps 2\u20133 set up the events and entries.</li>' +
     '<li><b>Tournament directors</b> \u2014 keep a master list (first name, last name, email) with <b>Manage directors</b> at the top of tournament setup. In setup, pick the director from the list, or tap <b>+ Add a new tournament director</b> to add one without leaving setup.</li>' +
+    '<li><b>Event types</b> \u2014 in step 2, pick each event\u2019s type from the list, or tap <b>+ Add event type</b> to create one without leaving setup.</li>' +
     '<li><b>Results passcode</b> \u2014 4 digits, different from the organizer passcode. Leave it blank so only the organizer can enter scores.</li>' +
     '<li><b>Individual round robin</b> \u2014 set the rounds and games per player, then tap <b>Draw matches</b>. If players change, <b>Reshuffle</b> clears all scores and redraws.</li>' +
     '<li><b>Manage</b> \u2014 edit entries and pools, move people off the waitlist, number the games, reorder play, print entry lists, and share invitations.</li>' +

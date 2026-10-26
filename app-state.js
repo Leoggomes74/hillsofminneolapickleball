@@ -455,6 +455,23 @@ document.addEventListener("click", function (e) {
   if (act === "opentypes") {
     return needPin(function () { S.retScreen = (S.screen === "new" || S.screen === "edit") && S.form ? S.screen : null; S.screen = "types"; S.typeDraft = {}; S.newType = { name: "", singles: false }; window.scrollTo(0, 0); render(); });
   }
+  if (act === "formnewtype") { var ei = +val; S.formType = S.formType && S.formType.ev === ei ? null : { ev: ei, name: "", singles: false }; return render(); }
+  if (act === "formaddtype") {
+    var ft = S.formType, fnm = ft ? String(ft.name || "").trim() : "";
+    if (!fnm) { toast("Name the event type"); return; }
+    if (types().some(function (x) { return x.name.toLowerCase() === fnm.toLowerCase(); })) { toast("That event type already exists", 2600); return; }
+    return needPin(function () {
+      var before = types().map(function (x) { return x.id; });
+      post({ action: "addEventType", name: fnm, singles: !!ft.singles }, "Event type added")
+        .then(function (r) {
+          if (!r) return;
+          var hit = types().filter(function (x) { return before.indexOf(x.id) < 0; })[0] ||
+            types().filter(function (x) { return x.name.toLowerCase() === fnm.toLowerCase(); })[0];
+          if (hit && S.form && S.form.events[ft.ev]) S.form.events[ft.ev].eventTypeId = hit.id;
+          S.formType = null; render();
+        });
+    });
+  }
   if (act === "addtype") {
     var nm = String(S.newType.name || "").trim();
     if (!nm) { toast("Name the event type"); return; }
@@ -786,7 +803,7 @@ document.addEventListener("click", function (e) {
 });
 
 document.addEventListener("input", function (e) {
-  var el = e.target.closest("[data-field],[data-ef],[data-num],[data-team],[data-note],[data-tf],[data-nt],[data-reg],[data-tform],[data-inv],[data-cn],[data-wl],[data-nd],[data-dd],[data-fd]");
+  var el = e.target.closest("[data-field],[data-ef],[data-num],[data-team],[data-note],[data-tf],[data-nt],[data-reg],[data-tform],[data-inv],[data-cn],[data-wl],[data-nd],[data-dd],[data-fd],[data-ft]");
   if (!el) return;
   if (el.hasAttribute("data-cn")) { S.form.courtNames[+el.getAttribute("data-cn")] = el.value; return; }
   if (el.hasAttribute("data-num")) {
@@ -809,6 +826,7 @@ document.addEventListener("input", function (e) {
   }
   if (el.hasAttribute("data-nt")) { S.newType.name = el.value; return; }
   if (el.hasAttribute("data-nd")) { S.newDir[el.getAttribute("data-nd")] = el.value; return; }
+  if (el.hasAttribute("data-ft")) { if (S.formType) { var fk = el.getAttribute("data-ft"); S.formType[fk] = fk === "singles" ? el.checked : el.value; } return; }
   if (el.hasAttribute("data-fd")) { if (S.formDir) S.formDir[el.getAttribute("data-fd")] = el.value; return; }
   if (el.hasAttribute("data-dd")) {
     var dp = el.getAttribute("data-dd").split(":"), base0 = directorOf(dp[0]) || {};
