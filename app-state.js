@@ -247,7 +247,7 @@ function blankForm() {
     regActive: true, requireTeamName: true,
     courtCount: 2, courtNames: ["Court 1", "Court 2"],
     date: new Date().toISOString().slice(0, 10), time: "08:00", endDate: "", endTime: "",
-    address: "", phone: "", email: "",
+    address: "", city: "", state: "", zip: "", phone: "", email: "",
     events: [blankEvent()], step: 1, error: ""
   };
   f.events[0].date = f.date;
@@ -295,7 +295,7 @@ function openEdit(id) {
       regActive: t.regActive !== false, requireTeamName: t.requireTeamName !== false,
       courtCount: t.courtCount || 0, courtNames: (TModel.courtsOf(t) || []).slice(),
       date: t.date || "", time: t.time || "", endDate: t.endDate || "", endTime: t.endTime || "",
-      address: t.address || "", phone: t.phone || "", email: t.email || "", scorePin: t.scorePin || "",
+      address: t.address || "", city: t.city || "", state: t.state || "", zip: t.zip || "", phone: t.phone || "", email: t.email || "", scorePin: t.scorePin || "",
       events: evsOf(t).map(function (e) {
         return {
           id: e.id, eventTypeId: e.eventTypeId, date: e.date || "", time: e.time || "",
@@ -364,7 +364,7 @@ function submitForm() {
   var payload = {
     name: f.name, director: String(f.director || "").trim(), fee: String(f.fee || "").trim(), date: f.date, time: f.time,
     endDate: f.endDate || "", endTime: f.endTime || "",
-    address: String(f.address || "").trim(), phone: String(f.phone || "").trim(), email: String(f.email || "").trim(),
+    address: String(f.address || "").trim(), city: String(f.city || "").trim(), state: String(f.state || "").trim().toUpperCase(), zip: String(f.zip || "").trim(), phone: String(f.phone || "").trim(), email: String(f.email || "").trim(),
     scorePin: f.scorePinTouched ? String(f.scorePin || "").trim() : undefined,
     regActive: f.regActive !== false, requireTeamName: f.requireTeamName !== false,
     courtCount: parseInt(f.courtCount, 10) || 0,

@@ -15,9 +15,13 @@ function when(t) {
   }
   return s;
 }
+function fullAddress(t) {
+  var sz = [t.state, t.zip].filter(Boolean).join(" ");
+  return [t.address, t.city, sz].filter(Boolean).join(", ");
+}
 function contactHtml(t) {
-  var p = [];
-  if (t.address) p.push('<a href="https://maps.google.com/?q=' + encodeURIComponent(t.address) + '" target="_blank" rel="noopener">' + esc(t.address) + '</a>');
+  var p = [], fa = fullAddress(t);
+  if (fa) p.push('<a href="https://maps.google.com/?q=' + encodeURIComponent(fa) + '" target="_blank" rel="noopener">' + esc(fa) + '</a>');
   if (t.phone) p.push('<a href="tel:' + esc(String(t.phone).replace(/[^+\d]/g, "")) + '">' + esc(t.phone) + '</a>');
   if (t.email) p.push('<a href="mailto:' + esc(t.email) + '">' + esc(t.email) + '</a>');
   return p.join('<br>');
@@ -181,7 +185,10 @@ function viewForm() {
         : 'Entrants enter only player name(s); their entry is listed by player name everywhere in the app.') + ' Applies to every event in this tournament.</div></div>';
     h += '<div class="fsec"><label>Results passcode</label><input type="text" inputmode="numeric" pattern="[0-9]*" data-field="scorePin" value="' + esc(f.scorePin || '') + '" maxlength="4" placeholder="4 digits, e.g. 2610">' +
       '<div class="fnote">Give this to scorekeepers. It only enters and clears game results for this tournament \u2014 no setup, registration or other changes. Leave blank to allow only the organizer passcode.</div></div>';
-    h += '<div class="fsec"><label>Address</label><input type="text" data-field="address" value="' + esc(f.address) + '" maxlength="120" placeholder="Venue name, street, city"></div>';
+    h += '<div class="fsec"><label>Address</label><input type="text" data-field="address" value="' + esc(f.address) + '" maxlength="120" placeholder="Venue name and street"></div>';
+    h += '<div class="fsec two" style="grid-template-columns:2fr 1fr 1.2fr"><div><label>City</label><input type="text" data-field="city" value="' + esc(f.city || '') + '" maxlength="60" placeholder="Minneola"></div>' +
+      '<div><label>State</label><input type="text" data-field="state" value="' + esc(f.state || '') + '" maxlength="2" placeholder="FL" style="text-transform:uppercase"></div>' +
+      '<div><label>Zip code</label><input type="text" inputmode="numeric" data-field="zip" value="' + esc(f.zip || '') + '" maxlength="10" placeholder="34715"></div></div>';
     h += '<div class="fsec two"><div><label>Contact phone</label><input type="tel" data-field="phone" value="' + esc(f.phone) + '" maxlength="30" placeholder="e.g. (352) 555-0123"></div>' +
       '<div><label>Contact email</label><input type="email" data-field="email" value="' + esc(f.email) + '" maxlength="80" placeholder="name@example.com"></div></div>';
     h += '<div class="fsec two"><div><label>Start date</label><input type="date" data-field="date" value="' + esc(f.date) + '"></div>' +
@@ -1229,7 +1236,7 @@ function tabInfo(t, e, v) {
   var h = '<div class="bar"><h2>Format &amp; rules</h2></div>';
   h += sec("This tournament", esc(t.name) + ' — ' + esc(when(t)) + '. ' + evs.length + ' event' + (evs.length === 1 ? '' : 's') + ' on the programme.' +
     (t.director ? ' Tournament director: <b>' + esc(t.director) + '</b>.' : ''));
-  if (t.address || t.phone || t.email) h += sec("Venue &amp; contact", contactHtml(t));
+  if (fullAddress(t) || t.phone || t.email) h += sec("Venue &amp; contact", contactHtml(t));
   h += sec("Registration fee", t.fee
     ? '<b>' + esc(t.fee) + '</b>, payable to the Tournament Organization.'
     : 'No entry fee for this tournament.');
