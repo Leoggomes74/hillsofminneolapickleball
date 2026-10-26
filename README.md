@@ -170,3 +170,22 @@ If the keypad accepts a code but saving fails, the two values differ.
 | `note` | tournamentId, who, text | — |
 | `register` | tournamentId, eventId, team, p1, p2 | — |
 | `removeNote` | tournamentId, id | ✓ |
+
+
+## Email new comments to the tournament director
+When someone posts on **Say**, the tournament's director (from the director master list) gets an email.
+
+### Option A — Gmail (no domain needed)
+1. Use a Gmail account (a new one like hillsminneola.tournaments@gmail.com works well).
+2. Turn on 2-Step Verification: myaccount.google.com → Security.
+3. Create an app password: myaccount.google.com/apppasswords → name it "Tournament app" → copy the 16-character code.
+4. In Vercel → Project → Settings → Environment Variables add:
+   - `GMAIL_USER` = the Gmail address
+   - `GMAIL_APP_PASSWORD` = the 16-character app password
+   - `APP_URL` = your site address (optional, adds a link in the email)
+5. Redeploy. Emails arrive from that Gmail address, named after the tournament.
+
+### Option B — Resend (needs your own domain)
+Set `RESEND_API_KEY` and `MAIL_FROM` instead. Gmail is used if both are set.
+
+Without either, comments still post — no email is sent.

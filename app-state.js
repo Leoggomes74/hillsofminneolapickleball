@@ -95,6 +95,12 @@ function ev() {
   return list.filter(function (e) { return e.id === S.evId; })[0] || list[0] || null;
 }
 function types() { return S.db.eventTypes || []; }
+function directors() {
+  return (S.db.directors || []).slice().sort(function (x, y) { return (x.last + " " + x.first).toLowerCase() < (y.last + " " + y.first).toLowerCase() ? -1 : 1; });
+}
+function directorOf(id) { return (S.db.directors || []).filter(function (d) { return d.id === id; })[0] || null; }
+function dirName(d) { return d ? (d.first + " " + d.last).trim() : ""; }
+function dirInUse(id) { return (S.db.tournaments || []).some(function (t) { return t.directorId === id; }); }
 function typeOf(id) { return types().filter(function (x) { return x.id === id; })[0] || null; }
 function typeName(id) { var x = typeOf(id); return x ? x.name : "Event"; }
 function typeSingles(id) { var x = typeOf(id); return x ? !!x.singles : false; }
@@ -243,7 +249,7 @@ function blankEvent(typeId) {
 }
 function blankForm() {
   var f = {
-    mode: "new", id: null, name: "", director: "", fee: "",
+    mode: "new", id: null, name: "", director: "", directorId: "", fee: "",
     regActive: true, requireTeamName: true,
     courtCount: 2, courtNames: ["Court 1", "Court 2"],
     date: new Date().toISOString().slice(0, 10), time: "08:00", endDate: "", endTime: "",
@@ -291,7 +297,7 @@ function openEdit(id) {
     var t = (S.db.tournaments || []).filter(function (x) { return x.id === id; })[0];
     if (!t) return;
     S.form = {
-      mode: "edit", id: t.id, name: t.name, director: t.director || "", fee: t.fee || "",
+      mode: "edit", id: t.id, name: t.name, director: t.director || "", directorId: t.directorId || "", fee: t.fee || "",
       regActive: t.regActive !== false, requireTeamName: t.requireTeamName !== false,
       courtCount: t.courtCount || 0, courtNames: (TModel.courtsOf(t) || []).slice(),
       date: t.date || "", time: t.time || "", endDate: t.endDate || "", endTime: t.endTime || "",
@@ -315,6 +321,12 @@ function openEdit(id) {
     if (!S.form.events.length) { S.form.events = [blankEvent()]; syncTeamRows(S.form.events[0]); }
     S.screen = "edit"; S.menu = null; window.scrollTo(0, 0); render();
   });
+}
+function dirInvalid(d) {
+  if (!d || !String(d.first || "").trim() || !String(d.last || "").trim()) return "First and last name are required";
+  var em = String(d.email || "").trim();
+  if (em && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) return "Check the email address";
+  return "";
 }
 function formValid(f) {
   var sp = String(f.scorePin || "").trim();
@@ -362,7 +374,8 @@ function submitForm() {
   var err = formValid(f);
   if (err) { f.error = err; render(); return; }
   var payload = {
-    name: f.name, director: String(f.director || "").trim(), fee: String(f.fee || "").trim(), date: f.date, time: f.time,
+    name: f.name, directorId: f.directorId || "",
+    director: f.directorId && directorOf(f.directorId) ? dirName(directorOf(f.directorId)) : String(f.director || "").trim(), fee: String(f.fee || "").trim(), date: f.date, time: f.time,
     endDate: f.endDate || "", endTime: f.endTime || "",
     address: String(f.address || "").trim(), city: String(f.city || "").trim(), state: String(f.state || "").trim().toUpperCase(), zip: String(f.zip || "").trim(), phone: String(f.phone || "").trim(), email: String(f.email || "").trim(),
     scorePin: f.scorePinTouched ? String(f.scorePin || "").trim() : undefined,
@@ -463,6 +476,38 @@ document.addEventListener("click", function (e) {
     row.singles = !row.singles; return render();
   }
   if (act === "tognewsingles") { S.newType.singles = !S.newType.singles; return render(); }
+
+  // ---- tournament directors ----
+  if (act === "opendirs") {
+    return needPin(function () { S.screen = "dirs"; S.dirDraft = {}; S.newDir = { first: "", last: "", email: "" }; window.scrollTo(0, 0); render(); });
+  }
+  if (act === "adddir" || act === "formadddir") {
+    var nd = act === "adddir" ? S.newDir : S.formDir;
+    var bad = dirInvalid(nd); if (bad) { toast(bad, 2600); return; }
+    return needPin(function () {
+      post({ action: "addDirector", first: nd.first.trim(), last: nd.last.trim(), email: String(nd.email || "").trim() }, "Director added")
+        .then(function (r) {
+          if (!r) return;
+          if (act === "adddir") S.newDir = { first: "", last: "", email: "" };
+          else if (S.form) {
+            var list = S.db.directors || [], hit = r.id ? directorOf(r.id) : list[list.length - 1];
+            if (hit) { S.form.directorId = hit.id; S.form.director = dirName(hit); }
+            S.formDir = null;
+          }
+          render();
+        });
+    });
+  }
+  if (act === "formnewdir") { S.formDir = S.formDir ? null : { first: "", last: "", email: "" }; return render(); }
+  if (act === "savedir") {
+    var dd = S.dirDraft[val] || directorOf(val);
+    var bad2 = dirInvalid(dd); if (bad2) { toast(bad2, 2600); return; }
+    return needPin(function () { post({ action: "updateDirector", id: val, first: dd.first.trim(), last: dd.last.trim(), email: String(dd.email || "").trim() }, "Saved"); });
+  }
+  if (act === "deldir") {
+    if (dirInUse(val)) { toast("Assigned to a tournament", 2600); return; }
+    return needPin(function () { post({ action: "removeDirector", id: val }, "Director removed"); });
+  }
 
   if (act === "invite") { if (val) S.tourId = val; S.screen = "invite"; S.menu = null; window.scrollTo(0, 0); return render(); }
   if (act === "backevent") { S.screen = "event"; window.scrollTo(0, 0); return render(); }
@@ -740,7 +785,7 @@ document.addEventListener("click", function (e) {
 });
 
 document.addEventListener("input", function (e) {
-  var el = e.target.closest("[data-field],[data-ef],[data-num],[data-team],[data-note],[data-tf],[data-nt],[data-reg],[data-tform],[data-inv],[data-cn],[data-wl]");
+  var el = e.target.closest("[data-field],[data-ef],[data-num],[data-team],[data-note],[data-tf],[data-nt],[data-reg],[data-tform],[data-inv],[data-cn],[data-wl],[data-nd],[data-dd],[data-fd]");
   if (!el) return;
   if (el.hasAttribute("data-cn")) { S.form.courtNames[+el.getAttribute("data-cn")] = el.value; return; }
   if (el.hasAttribute("data-num")) {
@@ -762,6 +807,13 @@ document.addEventListener("input", function (e) {
     return;
   }
   if (el.hasAttribute("data-nt")) { S.newType.name = el.value; return; }
+  if (el.hasAttribute("data-nd")) { S.newDir[el.getAttribute("data-nd")] = el.value; return; }
+  if (el.hasAttribute("data-fd")) { if (S.formDir) S.formDir[el.getAttribute("data-fd")] = el.value; return; }
+  if (el.hasAttribute("data-dd")) {
+    var dp = el.getAttribute("data-dd").split(":"), base0 = directorOf(dp[0]) || {};
+    var dr = S.dirDraft[dp[0]] || (S.dirDraft[dp[0]] = { first: base0.first || "", last: base0.last || "", email: base0.email || "" });
+    dr[dp[1]] = el.value; return;
+  }
   if (el.hasAttribute("data-tf")) {
     var tid = el.getAttribute("data-tf");
     var row = S.typeDraft[tid] || (S.typeDraft[tid] = { name: typeName(tid), singles: typeSingles(tid) });
@@ -786,6 +838,7 @@ document.addEventListener("input", function (e) {
   }
   if (el.getAttribute("data-field") === "schedQ") return;
   if (el.getAttribute("data-field") === "scorePin") S.form.scorePinTouched = true;
+  if (el.getAttribute("data-field") === "directorId") { S.form.directorId = el.value; var dsel = directorOf(el.value); if (dsel) S.form.director = dirName(dsel); return; }
   S.form[el.getAttribute("data-field")] = el.value;
 });
 document.addEventListener("keydown", function (e) {

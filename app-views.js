@@ -55,6 +55,7 @@ function viewHome() {
   var h = masthead("Pickleball<br>Tournaments", "Hills of Minneola · Pick an event", false);
   h += '<button class="cta" data-act="new">+ Create tournament</button>';
   h += '<button class="cta ghost" data-act="opentypes">⚙ Manage event types</button>';
+  h += '<button class="cta ghost" data-act="opendirs">👤 Manage tournament directors</button>';
   h += '<button class="cta ghost" data-act="openhelp">❓ How to use this app</button>';
   if (!live.length) {
     h += '<div class="empty">No tournaments yet. Create one, add its event types, and every schedule, pool and bracket builds itself.</div>';
@@ -151,6 +152,43 @@ function viewTypes() {
   return h;
 }
 
+// ---- tournament directors --------------------------------------------------
+function dirInputs(attr, d, keyPrefix) {
+  return '<div class="fsec two" style="padding:0;grid-template-columns:1fr 1fr"><div><label>First name</label><input type="text" ' + attr + '="' + keyPrefix + 'first" value="' + esc(d.first || '') + '" maxlength="40" placeholder="Jane"></div>' +
+    '<div><label>Last name</label><input type="text" ' + attr + '="' + keyPrefix + 'last" value="' + esc(d.last || '') + '" maxlength="40" placeholder="Smith"></div></div>' +
+    '<div class="fsec" style="padding:8px 0 0"><label>Email</label><input type="email" ' + attr + '="' + keyPrefix + 'email" value="' + esc(d.email || '') + '" maxlength="80" placeholder="name@example.com"></div>';
+}
+function viewDirs() {
+  var h = masthead("Tournament directors", "Master list · passcode protected", true);
+  h += '<div class="fnote top">Pick a director from this list in tournament setup. Changing a name here updates every tournament they direct. A director assigned to a tournament can\u2019t be deleted.</div>';
+  var list = directors();
+  if (!list.length) h += '<div class="empty small">No directors yet. Add the first one below.</div>';
+  list.forEach(function (x) {
+    var d = S.dirDraft[x.id] || x, used = dirInUse(x.id);
+    h += '<div class="ttrow">' + dirInputs('data-dd', d, x.id + ':') +
+      '<div class="ttfoot"><span class="ttuse">' + (used ? 'Assigned' : 'Unassigned') + '</span>' +
+        '<button class="tbtn" data-act="savedir" data-val="' + x.id + '">Save</button>' +
+        '<button class="tbtn danger" data-act="deldir" data-val="' + x.id + '"' + (used ? ' disabled' : '') + '>Delete</button>' +
+      '</div></div>';
+  });
+  h += '<div class="lbl rule">Add a tournament director</div>';
+  h += '<div class="ttrow">' + dirInputs('data-nd', S.newDir, '') +
+    '<div class="ttfoot"><span class="ttuse"></span><button class="tbtn go" data-act="adddir">Add</button></div></div>';
+  h += '<div class="pad"></div>';
+  return h;
+}
+function directorField(f) {
+  var list = directors(), legacy = f.director && !directorOf(f.directorId);
+  var opts = [['', legacy ? f.director + ' (not in list)' : '\u2014 Select a director \u2014']].concat(list.map(function (d) { return [d.id, dirName(d) + (d.email ? ' \u00b7 ' + d.email : '')]; }));
+  var h = '<div class="fsec"><label>Tournament director</label>' + selectEl('data-field', 'directorId', f.directorId || '', opts) +
+    '<button type="button" class="tbtn" style="margin-top:8px" data-act="formnewdir">' + (S.formDir ? 'Cancel' : '+ Add a new tournament director') + '</button>';
+  if (S.formDir) {
+    h += '<div class="regbox" style="margin:10px 0 0;padding:12px">' + dirInputs('data-fd', S.formDir, '') +
+      '<button type="button" class="fbtn" style="margin-top:10px;width:100%" data-act="formadddir">Add and select</button></div>';
+  }
+  return h + '<div class="fnote">Chosen from the master list. Shown on Info, printouts and invitations.</div></div>';
+}
+
 // ---- create / edit ---------------------------------------------------------
 function selectEl(attr, field, value, opts) {
   return '<select ' + attr + '="' + field + '">' + opts.map(function (o) {
@@ -170,7 +208,7 @@ function viewForm() {
   if (f.step === 1) {
     h += '<div class="fnote top">Master data for the whole tournament. Each event type you add next carries its own date, pools, format and roster — and can be left empty for players to register themselves.</div>';
     h += '<div class="fsec"><label>Tournament name</label><input type="text" data-field="name" value="' + esc(f.name) + '" placeholder="e.g. Hills of Minneola Fall Classic"></div>';
-    h += '<div class="fsec"><label>Tournament director</label><input type="text" data-field="director" value="' + esc(f.director) + '" placeholder="Who runs the event"></div>';
+    h += directorField(f);
     h += '<div class="fsec"><label>Registration fee</label><input type="text" data-field="fee" value="' + esc(f.fee) + '" placeholder="e.g. $40 per team" maxlength="40">' +
       '<div class="fnote">Shown on the Info tab and to anyone registering. Leave blank if the event is free.</div></div>';
     h += '<div class="fsec"><label>Registration status</label>' +
@@ -495,14 +533,15 @@ function viewHelp() {
     '<li><b>Bracket</b> \u2014 the knockout stage, including the third-place match if there is one. The champion is announced once the final is played.</li>' +
     '<li><b>Rounds</b> and <b>Standings</b> (individual round robin) \u2014 who you play with and against each round, plus who sits out. Players are ranked by wins, then losses, then point differential, then points won. It says \u201cleading so far\u201d until every game is scored, then shows 1st, 2nd and 3rd.</li>' +
     '<li><b>Recap</b> \u2014 a summary of results and awards.</li>' +
-    '<li><b>Say</b> \u2014 leave a comment for everyone at the event. No passcode needed.</li>' +
+    '<li><b>Say</b> \u2014 leave a comment for everyone at the event. No passcode needed. The tournament director is emailed a copy.</li>' +
     '<li><b>Info</b> \u2014 date and time, venue address (tap it for Google Maps), contact phone and email (tap to call or write), and entry fee.</li></ul>' +
     '<p>Formats only show the tabs they use. Pool play without a knockout has no Bracket, and single elimination has no Groups.</p>');
   h += sec("Getting there on time", '<p>Games don\u2019t start at fixed times \u2014 they run in the order shown on the Order tab as courts free up. Keep an eye on <b>Up next</b> on the Now tab so you\u2019re ready when your court opens.</p>');
   h += sec("Entering results (scorekeepers)", '<p>Tap a game and enter the scores. When asked, enter the tournament\u2019s 4-digit <b>results passcode</b>, which the organizer gives you. It works for this tournament only, and your phone remembers it until you close the browser.</p>' +
     '<p>To fix a score, open the game again, change it and save. To undo a game, clear both scores. The results passcode can\u2019t change setup, registration, the draw or the order of play.</p>');
   h += sec("Organizers", '<p>The organizer passcode unlocks everything:</p><ul class="hlplist">' +
-    '<li><b>Create / Edit setup</b> \u2014 step 1 has the tournament name, dates and times, courts, registration on/off, results passcode, address (street, city, state, zip), contact phone and email. Steps 2\u20133 set up the events and entries.</li>' +
+    '<li><b>Create / Edit setup</b> \u2014 step 1 has the tournament name, director, dates and times, courts, registration on/off, results passcode, address (street, city, state, zip), contact phone and email. Steps 2\u20133 set up the events and entries.</li>' +
+    '<li><b>Tournament directors</b> \u2014 keep a master list (first name, last name, email) under <b>Manage tournament directors</b> on the home screen. In setup, pick the director from the list, or tap <b>+ Add a new tournament director</b> to add one without leaving setup.</li>' +
     '<li><b>Results passcode</b> \u2014 4 digits, different from the organizer passcode. Leave it blank so only the organizer can enter scores.</li>' +
     '<li><b>Individual round robin</b> \u2014 set the rounds and games per player, then tap <b>Draw matches</b>. If players change, <b>Reshuffle</b> clears all scores and redraws.</li>' +
     '<li><b>Manage</b> \u2014 edit entries and pools, move people off the waitlist, number the games, reorder play, print entry lists, and share invitations.</li>' +
@@ -1273,7 +1312,7 @@ function tabInfo(t, e, v) {
   var evs = evsOf(t);
   var h = '<div class="bar"><h2>Format &amp; rules</h2></div>';
   h += sec("This tournament", esc(t.name) + ' — ' + esc(when(t)) + '. ' + evs.length + ' event' + (evs.length === 1 ? '' : 's') + ' on the programme.' +
-    (t.director ? ' Tournament director: <b>' + esc(t.director) + '</b>.' : ''));
+    (t.director ? ' Tournament director: <b>' + esc(t.director) + '</b>' + (directorOf(t.directorId) && directorOf(t.directorId).email ? ' (<a href="mailto:' + esc(directorOf(t.directorId).email) + '">' + esc(directorOf(t.directorId).email) + '</a>)' : '') + '.' : ''));
   if (fullAddress(t) || t.phone || t.email) h += sec("Venue &amp; contact", contactHtml(t));
   h += sec("Registration fee", t.fee
     ? '<b>' + esc(t.fee) + '</b>, payable to the Tournament Organization.'
@@ -1443,6 +1482,7 @@ function render() {
   else if (S.screen === "help") h = viewHelp();
   else if (S.screen === "invite") h = viewInvite();
   else if (S.screen === "types") h = viewTypes();
+  else if (S.screen === "dirs") h = viewDirs();
   else if (S.screen === "new" || S.screen === "edit") h = S.form ? viewForm() : viewHome();
   else h = viewEvent();
   h += sheet() + teamSheet() + courtSheet() + qualSheet() + gate() + confirmBox();
