@@ -4,6 +4,7 @@
 // POST /api/data { action, pin, ... }     -> { t, db }
 //   tournament: create, update, remove, restore, duplicate, lock, setDefault, purge
 //   event type: addEventType, renameEventType, removeEventType
+//   directors:  addDirector, updateDirector, removeDirector
 //   scores:     score, clearScore   (require eventId)
 //   open:       note                (no passcode) / removeNote (passcode)
 //
@@ -19,6 +20,44 @@ const PIN = process.env.SCORE_PASSCODE || "2074";
 const DB_KEY = "hom:db";
 const STAMP_KEY = "hom:updated";
 const LEGACY_KEY = "hom2026:results";
+// Email on new Say comments (optional). Two ways to send — no domain needed for Gmail:
+//   GMAIL_USER + GMAIL_APP_PASSWORD — send from a Gmail account (app password, not your normal password)
+//   RESEND_API_KEY + MAIL_FROM      — send via resend.com (needs a verified domain)
+//   APP_URL                          — link back to the app in the email (optional)
+// With neither configured, comments still post and no email is sent.
+const GMAIL_USER = process.env.GMAIL_USER || "";
+const GMAIL_PASS = (process.env.GMAIL_APP_PASSWORD || "").replace(/\s+/g, "");
+const RESEND_KEY = process.env.RESEND_API_KEY || "";
+const MAIL_FROM = process.env.MAIL_FROM || "Tournament app <onboarding@resend.dev>";
+const APP_URL = process.env.APP_URL || "";
+const escH = s => String(s || "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+async function mailDirector(db, tour, note) {
+  if (!GMAIL_USER && !RESEND_KEY) return;
+  const d = (db.directors || []).find(x => x.id === tour.directorId);
+  if (!d || !d.email) return;
+  const html = '<div style="font-family:system-ui,sans-serif;font-size:15px;color:#123524">' +
+    '<p style="margin:0 0 6px;color:#5b6b60">New comment on <b>' + escH(tour.name) + '</b></p>' +
+    '<p style="margin:0 0 4px"><b>' + escH(note.who) + '</b></p>' +
+    '<p style="margin:0 0 16px;white-space:pre-wrap">' + escH(note.text) + '</p>' +
+    (APP_URL ? '<p style="margin:0"><a href="' + escH(APP_URL) + '" style="color:#2f6b45">Open the tournament app</a></p>' : '') + '</div>';
+  const subject = "New comment \u2014 " + tour.name + " (from " + note.who + ")";
+  const text = tour.name + "\n\n" + note.who + ":\n" + note.text + (APP_URL ? "\n\n" + APP_URL : "");
+  try {
+    if (GMAIL_USER && GMAIL_PASS) {
+      const nodemailer = (await import("nodemailer")).default;
+      const tx = nodemailer.createTransport({ service: "gmail", auth: { user: GMAIL_USER, pass: GMAIL_PASS }, connectionTimeout: 5000, socketTimeout: 6000 });
+      await tx.sendMail({ from: '"' + (tour.name || "Tournament app").replace(/"/g, "") + '" <' + GMAIL_USER + '>', to: d.email, subject, html, text });
+      return;
+    }
+    const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 4000);
+    await fetch("https://api.resend.com/emails", {
+      method: "POST", signal: ctl.signal,
+      headers: { Authorization: "Bearer " + RESEND_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: MAIL_FROM, to: [d.email], subject, html, text })
+    });
+    clearTimeout(tm);
+  } catch (e) { console.error("comment email failed:", e && e.message); /* best-effort; comment already saved */ }
+}
 
 async function kv(command) {
   if (!URL_ || !TOKEN) throw new Error("KV not configured");
@@ -227,6 +266,7 @@ function sanitizeTournament(body, existing) {
     id: existing ? existing.id : `${slug(body.name)}-${Date.now().toString(36).slice(-4)}`,
     name: clean(body.name, 60) || "Untitled tournament",
     director: clean(body.director, 60),
+    directorId: clean(body.directorId, 40),
     fee: clean(body.fee, 40),
     date: clean(body.date, 10),
     time: clean(body.time, 5),
@@ -309,6 +349,31 @@ export default async function (req, res) {
       }
       const t = await writeDb(db);
       return res.status(200).json({ t, db: pub(db, isAdmin) });
+    }
+
+    // ---- tournament director master list ---------------------------------------
+    if (a === "addDirector" || a === "updateDirector" || a === "removeDirector") {
+      db.directors = Array.isArray(db.directors) ? db.directors : [];
+      const first = clean(body.first, 40), last = clean(body.last, 40), email = clean(body.email, 80);
+      let newId = "";
+      if (a === "addDirector" || a === "updateDirector") {
+        if (!first || !last) return res.status(400).json({ error: "first and last name required" });
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "invalid email" });
+      }
+      if (a === "addDirector") {
+        newId = "td" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+        db.directors.push({ id: newId, first, last, email });
+      } else if (a === "updateDirector") {
+        const cur = db.directors.find(d => d.id === body.id);
+        if (!cur) return res.status(404).json({ error: "no such director" });
+        Object.assign(cur, { first, last, email });
+        db.tournaments.forEach(t => { if (t.directorId === cur.id) t.director = first + " " + last; });
+      } else {
+        if (db.tournaments.some(t => t.directorId === body.id)) return res.status(409).json({ error: "director is assigned to a tournament" });
+        db.directors = db.directors.filter(d => d.id !== body.id);
+      }
+      const t = await writeDb(db);
+      return res.status(200).json({ t, db: pub(db, isAdmin), id: newId });
     }
 
     // ---- public self-registration -------------------------------------------
@@ -404,6 +469,7 @@ export default async function (req, res) {
         tour.notes.push({ id: "n" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), who, text, at: Date.now() });
       }
       const t = await writeDb(db);
+      if (a === "note") await mailDirector(db, tour, tour.notes[tour.notes.length - 1]);
       return res.status(200).json({ t, db: pub(db, isAdmin) });
     }
 
