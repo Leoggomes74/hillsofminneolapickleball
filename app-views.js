@@ -178,6 +178,8 @@ function viewForm() {
       '<div class="fnote">' + (f.requireTeamName
         ? 'Entrants pick a team/entry name plus their player name(s).'
         : 'Entrants enter only player name(s); their entry is listed by player name everywhere in the app.') + ' Applies to every event in this tournament.</div></div>';
+    h += '<div class="fsec"><label>Results passcode</label><input type="text" inputmode="numeric" pattern="[0-9]*" data-field="scorePin" value="' + esc(f.scorePin || '') + '" maxlength="4" placeholder="4 digits, e.g. 2610">' +
+      '<div class="fnote">Give this to scorekeepers. It only enters and clears game results for this tournament \u2014 no setup, registration or other changes. Leave blank to allow only the organizer passcode.</div></div>';
     h += '<div class="fsec"><label>Address</label><input type="text" data-field="address" value="' + esc(f.address) + '" maxlength="120" placeholder="Venue name, street, city"></div>';
     h += '<div class="fsec two"><div><label>Contact phone</label><input type="tel" data-field="phone" value="' + esc(f.phone) + '" maxlength="30" placeholder="e.g. (352) 555-0123"></div>' +
       '<div><label>Contact email</label><input type="email" data-field="email" value="' + esc(f.email) + '" maxlength="80" placeholder="name@example.com"></div></div>';
@@ -1365,7 +1367,7 @@ function gate() {
   if (!S.gate) return "";
   return '<div class="back2" data-act="gateclose" data-back="1"><div class="sheet gate">' +
     '<div class="h"><b>' + (S.gateScore ? 'Passcode' : 'Organizer passcode') + '</b><button data-act="gateclose">CLOSE</button></div>' +
-    '<div class="msg">' + (S.gateScore ? 'Enter the organizer or score-entry passcode to enter game results.' : 'Organizer passcode required. The score-entry passcode only enters game results.') + '</div>' +
+    '<div class="msg">' + (S.pinChecking ? 'Checking\u2026' : S.gateScore ? 'Enter the organizer passcode or this tournament\u2019s results passcode.' : 'Organizer passcode required. A results passcode only enters game results.') + '</div>' +
     '<div class="dots">' + [0, 1, 2, 3].map(function (i) {
       return '<i class="' + (S.bad ? "bad" : (S.pin.length > i ? "on" : "")) + '"></i>';
     }).join('') + '</div>' +

@@ -1,7 +1,6 @@
 // State, API access, routing, event handling.
 var API = "/api/data";
 var PASSCODE = "2074";
-var SCORE_PASSCODE = "2610"; // score entry only
 var LKEY = "hom.db";
 var CLOUD = location.protocol !== "file:";
 
@@ -32,7 +31,7 @@ var S = {
 };
 
 try { S.unlocked = sessionStorage.getItem("hom.unlocked") === "1"; } catch (e) {}
-try { S.pinUsed = sessionStorage.getItem("hom.pin") || ""; S.scorer = sessionStorage.getItem("hom.role") === "score"; } catch (e) {}
+try { S.pinUsed = sessionStorage.getItem("hom.pin") || ""; S.scorer = sessionStorage.getItem("hom.role") === "score"; S.scorerFor = sessionStorage.getItem("hom.scoreTour") || ""; } catch (e) {}
 try { var c = localStorage.getItem(LKEY); if (c) S.db = JSON.parse(c); } catch (e) {}
 
 // ---- shape guards ----------------------------------------------------------
@@ -115,7 +114,7 @@ function toast(msg, ms) { S.toast = msg; render(); setTimeout(function () { S.to
 // ---- api -------------------------------------------------------------------
 function load(quiet) {
   if (!CLOUD) { S.sync = "local"; return Promise.resolve(false); }
-  return fetch(API, { cache: "no-store" })
+  return fetch(API, { cache: "no-store", headers: S.unlocked && S.pinUsed ? { "x-pin": S.pinUsed } : {} })
     .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(function (d) {
       if (d && d.db) { S.db = upgradeDb(d.db); cacheDb(); }
@@ -151,26 +150,38 @@ function post(payload, okMsg) {
 }
 
 // ---- passcode gate ---------------------------------------------------------
+// scoreOk: the action is result entry, so this tournament's own results
+// passcode (set in tournament setup) is accepted alongside the organizer one.
 function needPin(then, scoreOk) {
   if (S.unlocked && S.pinUsed) { then(); return; }
-  if (scoreOk && S.scorer && S.pinUsed) { then(); return; }
-  S.gate = true; S.gateScore = !!scoreOk; S.gateThen = then; S.pin = ""; S.bad = false; render();
+  var t = tour();
+  if (scoreOk && S.scorer && S.pinUsed && t && S.scorerFor === t.id) { then(); return; }
+  S.gate = true; S.gateScore = !!scoreOk; S.gateTour = t ? t.id : ""; S.gateThen = then; S.pin = ""; S.bad = false; render();
 }
 function grantPin(role) {
-  S.unlocked = role === "admin"; S.scorer = role === "score"; S.pinUsed = S.pin;
-  try { sessionStorage.setItem("hom.unlocked", S.unlocked ? "1" : "0"); sessionStorage.setItem("hom.pin", S.pin); sessionStorage.setItem("hom.role", role); } catch (e) {}
+  S.unlocked = role === "admin"; S.scorer = role === "score"; S.scorerFor = role === "score" ? S.gateTour : ""; S.pinUsed = S.pin;
+  try { sessionStorage.setItem("hom.unlocked", S.unlocked ? "1" : "0"); sessionStorage.setItem("hom.pin", S.pin); sessionStorage.setItem("hom.role", role); sessionStorage.setItem("hom.scoreTour", S.scorerFor); } catch (e) {}
   var then = S.gateThen; S.gate = null; S.gateThen = null; S.pin = "";
-  render(); if (then) then();
+  render();
+  if (role === "admin") load(true).then(function () { if (then) then(); });
+  else if (then) then();
 }
+function pinBad() { S.bad = true; S.pinChecking = false; render(); }
 function pinKey(k) {
+  if (S.pinChecking) return;
   if (S.bad) { S.pin = ""; S.bad = false; }
   if (k === "del") S.pin = S.pin.slice(0, -1);
   else if (S.pin.length < 4) S.pin += k;
   if (S.pin.length === 4) {
     if (S.pin === PASSCODE) return grantPin("admin");
-    if (S.pin === SCORE_PASSCODE && S.gateScore) return grantPin("score");
-    S.bad = true;
-    if (S.pin === SCORE_PASSCODE) toast("Score-entry passcode can\u2019t change setup or registration", 2800);
+    if (!S.gateScore || !S.gateTour) return pinBad();
+    var t = (S.db.tournaments || []).filter(function (x) { return x.id === S.gateTour; })[0];
+    if (!CLOUD) return t && t.scorePin && t.scorePin === S.pin ? grantPin("score") : pinBad();
+    S.pinChecking = true; render();
+    fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "checkScorePin", tournamentId: S.gateTour, pin: S.pin }) })
+      .then(function (r) { S.pinChecking = false; if (r.ok) grantPin("score"); else pinBad(); })
+      .catch(function () { toast("No connection"); pinBad(); });
+    return;
   }
   render();
 }
@@ -284,7 +295,7 @@ function openEdit(id) {
       regActive: t.regActive !== false, requireTeamName: t.requireTeamName !== false,
       courtCount: t.courtCount || 0, courtNames: (TModel.courtsOf(t) || []).slice(),
       date: t.date || "", time: t.time || "", endDate: t.endDate || "", endTime: t.endTime || "",
-      address: t.address || "", phone: t.phone || "", email: t.email || "",
+      address: t.address || "", phone: t.phone || "", email: t.email || "", scorePin: t.scorePin || "",
       events: evsOf(t).map(function (e) {
         return {
           id: e.id, eventTypeId: e.eventTypeId, date: e.date || "", time: e.time || "",
@@ -306,6 +317,9 @@ function openEdit(id) {
   });
 }
 function formValid(f) {
+  var sp = String(f.scorePin || "").trim();
+  if (sp && !/^\d{4}$/.test(sp)) return "Results passcode must be exactly 4 digits.";
+  if (sp && sp === PASSCODE) return "Results passcode must be different from the organizer passcode.";
   if (!String(f.name).trim()) return "Give the tournament a name.";
   if (f.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(f.email).trim())) return "Contact email doesn't look right.";
   if (f.endDate && f.date && (f.endDate + "T" + (f.endTime || "23:59")) < (f.date + "T" + (f.time || "00:00"))) return "The end date and time must be after the start.";
@@ -351,6 +365,7 @@ function submitForm() {
     name: f.name, director: String(f.director || "").trim(), fee: String(f.fee || "").trim(), date: f.date, time: f.time,
     endDate: f.endDate || "", endTime: f.endTime || "",
     address: String(f.address || "").trim(), phone: String(f.phone || "").trim(), email: String(f.email || "").trim(),
+    scorePin: f.scorePinTouched ? String(f.scorePin || "").trim() : undefined,
     regActive: f.regActive !== false, requireTeamName: f.requireTeamName !== false,
     courtCount: parseInt(f.courtCount, 10) || 0,
     courtNames: (f.courtNames || []).map(function (n) { return String(n || "").trim(); }),
@@ -770,6 +785,7 @@ document.addEventListener("input", function (e) {
     return;
   }
   if (el.getAttribute("data-field") === "schedQ") return;
+  if (el.getAttribute("data-field") === "scorePin") S.form.scorePinTouched = true;
   S.form[el.getAttribute("data-field")] = el.value;
 });
 document.addEventListener("keydown", function (e) {
