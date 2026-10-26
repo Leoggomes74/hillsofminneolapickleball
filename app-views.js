@@ -476,6 +476,45 @@ function shortStage(m) {
 // ---- printable team / player list ------------------------------------------
 function viewHelp() {
   var h = '<div class="hd noprint"><button class="back" data-act="backhelp">‹</button>' +
+    '<div class="hdmain"><h1>How to use this app</h1><div class="sub">Players, scorekeepers and organizers</div></div></div>';
+  var sec = function (title, body) { return '<div class="lbl rule">' + esc(title) + '</div><div class="hlpbox">' + body + '</div>'; };
+  h += '<div class="hlpbox intro">Everything works from your phone \u2014 no login, no app to install. Players need no passcode. Scorekeepers use the tournament\u2019s <b>results passcode</b>; everything else needs the <b>organizer passcode</b>.</div>';
+  h += sec("Finding your tournament", '<p>The home screen lists every open tournament. Tap one to open it. Past tournaments are under <b>Archived</b>, newest first.</p>' +
+    '<p>If a tournament has more than one event (e.g. Men\u2019s Doubles and Mixed), the chips at the top of the screen switch between them.</p>');
+  h += sec("Tournament formats", '<ul class="hlplist">' +
+    '<li><b>Pool play</b> \u2014 teams play a round robin in pools; the top teams can advance to a knockout bracket.</li>' +
+    '<li><b>Single elimination</b> \u2014 a straight knockout bracket. Lose once and you\u2019re out. There may be a third-place match.</li>' +
+    '<li><b>Individual round robin</b> \u2014 you register alone. Each round you get a different partner and opponents, and you\u2019re ranked on your own results.</li></ul>');
+  h += sec("Registering", '<p>On the <b>Teams</b> tab (<b>Players</b> in individual round robin), if an event has room you\u2019ll see a registration box. Enter your name \u2014 plus your partner and team name for doubles \u2014 and tap <b>Register</b>. No passcode needed.</p>' +
+    '<p>Once the event is full, the box becomes a <b>Waitlist</b>. You\u2019re listed by position (#1, #2\u2026) and moved in, in order, if a spot opens. If registration is closed, the box doesn\u2019t appear.</p>' +
+    '<p>Made a typo? Ask the tournament director \u2014 corrections need the organizer passcode.</p>');
+  h += sec("The tabs", '<ul class="hlplist">' +
+    '<li><b>Now</b> \u2014 games on court, what\u2019s up next with its court, and the latest results. Your first stop during play.</li>' +
+    '<li><b>Order</b> \u2014 the full running order across every court, with status (<b>Open</b> / <b>Live</b> / <b>Finished</b>). Search your name, then tap <b>Apply</b>; <b>Reset</b> shows everyone again.</li>' +
+    '<li><b>Groups</b> \u2014 pool standings (wins, losses, point differential) and every pool game. Highlighted rows are advancing.</li>' +
+    '<li><b>Bracket</b> \u2014 the knockout stage, including the third-place match if there is one. The champion is announced once the final is played.</li>' +
+    '<li><b>Rounds</b> and <b>Standings</b> (individual round robin) \u2014 who you play with and against each round, plus who sits out. Players are ranked by wins, then losses, then point differential, then points won. It says \u201cleading so far\u201d until every game is scored, then shows 1st, 2nd and 3rd.</li>' +
+    '<li><b>Recap</b> \u2014 a summary of results and awards.</li>' +
+    '<li><b>Say</b> \u2014 leave a comment for everyone at the event. No passcode needed.</li>' +
+    '<li><b>Info</b> \u2014 date and time, venue address (tap it for Google Maps), contact phone and email (tap to call or write), and entry fee.</li></ul>' +
+    '<p>Formats only show the tabs they use. Pool play without a knockout has no Bracket, and single elimination has no Groups.</p>');
+  h += sec("Getting there on time", '<p>Games don\u2019t start at fixed times \u2014 they run in the order shown on the Order tab as courts free up. Keep an eye on <b>Up next</b> on the Now tab so you\u2019re ready when your court opens.</p>');
+  h += sec("Entering results (scorekeepers)", '<p>Tap a game and enter the scores. When asked, enter the tournament\u2019s 4-digit <b>results passcode</b>, which the organizer gives you. It works for this tournament only, and your phone remembers it until you close the browser.</p>' +
+    '<p>To fix a score, open the game again, change it and save. To undo a game, clear both scores. The results passcode can\u2019t change setup, registration, the draw or the order of play.</p>');
+  h += sec("Organizers", '<p>The organizer passcode unlocks everything:</p><ul class="hlplist">' +
+    '<li><b>Create / Edit setup</b> \u2014 step 1 has the tournament name, dates and times, courts, registration on/off, results passcode, address (street, city, state, zip), contact phone and email. Steps 2\u20133 set up the events and entries.</li>' +
+    '<li><b>Results passcode</b> \u2014 4 digits, different from the organizer passcode. Leave it blank so only the organizer can enter scores.</li>' +
+    '<li><b>Individual round robin</b> \u2014 set the rounds and games per player, then tap <b>Draw matches</b>. If players change, <b>Reshuffle</b> clears all scores and redraws.</li>' +
+    '<li><b>Manage</b> \u2014 edit entries and pools, move people off the waitlist, number the games, reorder play, print entry lists, and share invitations.</li>' +
+    '<li><b>Tournament menu (\u22ef)</b> \u2014 duplicate, set as default, lock/unlock, or archive.</li></ul>' +
+    '<p>A <b>Sync</b> or <b>Retry</b> badge at the top means changes are saving or the connection dropped. No badge means you\u2019re up to date.</p>');
+  h += '<div class="pad"></div>';
+  return h;
+}
+
+// ---- printable team / player list ------------------------------------------
+function viewHelp() {
+  var h = '<div class="hd noprint"><button class="back" data-act="backhelp">‹</button>' +
     '<div class="hdmain"><h1>Player guide</h1><div class="sub">Using the tournament app</div></div></div>';
   var sec = function (title, body) { return '<div class="lbl rule">' + esc(title) + '</div><div class="hlpbox">' + body + '</div>'; };
   h += '<div class="hlpbox intro">Everything here works from your phone, with no login and no app to install — just this page. This guide covers what you can do as a player. Anything needing an organizer passcode is handled by the tournament director.</div>';
