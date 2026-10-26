@@ -9,12 +9,13 @@
 //
 // Storage: Vercel KV / Upstash Redis REST API.
 // SCORE_PASSCODE gates every write except `note` (defaults to 2074).
-// RESULTS_PASSCODE (defaults to 2610) may only do score / clearScore.
+// Each tournament may set its own 4-digit results passcode (scorePin) that
+// may only do score / clearScore on that tournament. It is never returned
+// to non-organizers.
 
 const URL_ = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
 const TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 const PIN = process.env.SCORE_PASSCODE || "2074";
-const SCORE_PIN = process.env.RESULTS_PASSCODE || "2610";   // game results only
 const DB_KEY = "hom:db";
 const STAMP_KEY = "hom:updated";
 const LEGACY_KEY = "hom2026:results";
@@ -158,6 +159,12 @@ async function readDb() {
   return { db, t: Date.now() };
 }
 
+// Hide each tournament's results passcode from anyone but the organizer.
+function pub(db, isAdmin) {
+  if (isAdmin) return db;
+  return { ...db, tournaments: (db.tournaments || []).map(x => { const { scorePin, ...rest } = x; return rest; }) };
+}
+
 async function writeDb(db) {
   const t = Date.now();
   await Promise.all([
@@ -228,6 +235,7 @@ function sanitizeTournament(body, existing) {
     address: clean(body.address, 120),
     phone: clean(body.phone, 30),
     email: clean(body.email, 80),
+    scorePin: (() => { const p = String(body.scorePin == null ? (existing ? existing.scorePin || "" : "") : body.scorePin).trim(); return /^\d{4}$/.test(p) && p !== String(PIN) ? p : ""; })(),
     events: events.length ? events : prev,
     requireTeamName,
     order: Array.isArray(body.order) ? body.order.slice(0, 600).map(k => clean(k, 60)) : (existing ? existing.order || [] : []),
@@ -247,7 +255,8 @@ export default async function (req, res) {
   try {
     if (req.method === "GET") {
       const { db, t } = await readDb();
-      return res.status(200).json({ t, db });
+      const isAdmin = String(req.headers["x-pin"] || "") === String(PIN);
+      return res.status(200).json({ t, db: pub(db, isAdmin) });
     }
     if (req.method !== "POST") {
       res.setHeader("Allow", "GET, POST");
@@ -256,14 +265,19 @@ export default async function (req, res) {
 
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
     const OPEN = new Set(["note", "register", "waitlist"]);   // actions that need no passcode
-    const SCORE_ONLY = new Set(["score", "clearScore"]);      // actions the results passcode may do
+    const SCORE_ONLY = new Set(["score", "clearScore"]);      // actions a tournament's results passcode may do
     const pin = String(body.pin || "");
-    const okPin = pin === String(PIN) || (SCORE_ONLY.has(body.action) && pin === String(SCORE_PIN));
+    const isAdmin = pin === String(PIN);
+    const { db } = await readDb();
+    const tourPin = (() => { const x = (db.tournaments || []).find(y => y.id === body.tournamentId); return x && /^\d{4}$/.test(x.scorePin || "") ? x.scorePin : ""; })();
+    if (body.action === "checkScorePin") {
+      return tourPin && pin === tourPin ? res.status(200).json({ ok: true }) : res.status(401).json({ error: "bad passcode" });
+    }
+    const okPin = isAdmin || (SCORE_ONLY.has(body.action) && !!tourPin && pin === tourPin);
     if (!OPEN.has(body.action) && !okPin) {
       return res.status(401).json({ error: "bad passcode" });
     }
 
-    const { db } = await readDb();
     const find = id => db.tournaments.find(x => x.id === id);
     const findEv = (tour, id) => (tour.events || []).find(e => e.id === id) || (tour.events || [])[0];
     const a = body.action;
@@ -291,7 +305,7 @@ export default async function (req, res) {
         if (!db.eventTypes.length) return res.status(409).json({ error: "keep at least one event type" });
       }
       const t = await writeDb(db);
-      return res.status(200).json({ t, db });
+      return res.status(200).json({ t, db: pub(db, isAdmin) });
     }
 
     // ---- public self-registration -------------------------------------------
@@ -322,7 +336,7 @@ export default async function (req, res) {
       for (let i = 1; i < pc; i++) if (counts[i] < counts[pool]) pool = i;
       ev.teams.push({ name, players: single ? [p1] : [p1, p2], pool, registered: Date.now() });
       const t = await writeDb(db);
-      return res.status(200).json({ t, db });
+      return res.status(200).json({ t, db: pub(db, isAdmin) });
     }
 
     // ---- waitlist ------------------------------------------------------------
@@ -370,7 +384,7 @@ export default async function (req, res) {
         });
       }
       const t = await writeDb(db);
-      return res.status(200).json({ t, db });
+      return res.status(200).json({ t, db: pub(db, isAdmin) });
     }
 
     if (a === "note" || a === "removeNote") {
@@ -387,7 +401,7 @@ export default async function (req, res) {
         tour.notes.push({ id: "n" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), who, text, at: Date.now() });
       }
       const t = await writeDb(db);
-      return res.status(200).json({ t, db });
+      return res.status(200).json({ t, db: pub(db, isAdmin) });
     }
 
     if (a === "updateTeam" || a === "removeTeam") {
@@ -433,7 +447,7 @@ export default async function (req, res) {
         }
       }
       const t = await writeDb(db);
-      return res.status(200).json({ t, db });
+      return res.status(200).json({ t, db: pub(db, isAdmin) });
     }
 
     if (a === "score" || a === "clearScore") {
@@ -548,7 +562,7 @@ export default async function (req, res) {
     }
 
     const t = await writeDb(db);
-    return res.status(200).json({ t, db });
+    return res.status(200).json({ t, db: pub(db, isAdmin) });
   } catch (e) {
     return res.status(500).json({ error: String(e.message || e) });
   }
