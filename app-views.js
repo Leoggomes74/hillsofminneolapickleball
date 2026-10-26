@@ -46,7 +46,8 @@ function masthead(title, sub, back) {
 
 // ---- home ------------------------------------------------------------------
 function viewHome() {
-  var live = tours(), archived = (S.db.tournaments || []).filter(function (t) { return t.archived; });
+  var live = tours(), archived = (S.db.tournaments || []).filter(function (t) { return t.archived; })
+    .sort(function (x, y) { var kx = (x.date || "") + (x.time || ""), ky = (y.date || "") + (y.time || ""); return ky < kx ? -1 : ky > kx ? 1 : (y.createdAt || 0) - (x.createdAt || 0); });
   var h = masthead("Pickleball<br>Tournaments", "Hills of Minneola · Pick an event", false);
   h += '<button class="cta" data-act="new">+ Create tournament</button>';
   h += '<button class="cta ghost" data-act="opentypes">⚙ Manage event types</button>';
