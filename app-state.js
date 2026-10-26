@@ -445,6 +445,7 @@ document.addEventListener("click", function (e) {
   if (act === "pickev") { S.evId = val; S.editing = null; window.scrollTo(0, 0); return render(); }  if (act === "home") { S.screen = "home"; S.tourId = null; S.evId = null; S.menu = null; S.form = null; window.scrollTo(0, 0); return render(); }
   if (act === "tab") { S.tab = val; S.editing = null; window.scrollTo(0, 0); return render(); }
   if (act === "new") return openNew();
+  if (act === "backform") { S.screen = S.retScreen || "home"; S.retScreen = null; window.scrollTo(0, 0); return render(); }
   if (act === "edit") return openEdit(val);
   if (act === "menu") { S.menu = S.menu === val ? null : val; return render(); }
   if (act === "closemenu") { S.menu = null; return render(); }
@@ -452,7 +453,7 @@ document.addEventListener("click", function (e) {
 
   // ---- event type table ----
   if (act === "opentypes") {
-    return needPin(function () { S.screen = "types"; S.typeDraft = {}; S.newType = { name: "", singles: false }; window.scrollTo(0, 0); render(); });
+    return needPin(function () { S.retScreen = (S.screen === "new" || S.screen === "edit") && S.form ? S.screen : null; S.screen = "types"; S.typeDraft = {}; S.newType = { name: "", singles: false }; window.scrollTo(0, 0); render(); });
   }
   if (act === "addtype") {
     var nm = String(S.newType.name || "").trim();
@@ -479,7 +480,7 @@ document.addEventListener("click", function (e) {
 
   // ---- tournament directors ----
   if (act === "opendirs") {
-    return needPin(function () { S.screen = "dirs"; S.dirDraft = {}; S.newDir = { first: "", last: "", email: "" }; window.scrollTo(0, 0); render(); });
+    return needPin(function () { S.retScreen = (S.screen === "new" || S.screen === "edit") && S.form ? S.screen : null; S.screen = "dirs"; S.dirDraft = {}; S.newDir = { first: "", last: "", email: "" }; window.scrollTo(0, 0); render(); });
   }
   if (act === "adddir" || act === "formadddir") {
     var nd = act === "adddir" ? S.newDir : S.formDir;

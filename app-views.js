@@ -43,7 +43,7 @@ function syncChip() {
 
 function masthead(title, sub, back) {
   return '<div class="hd">' +
-    (back ? '<button class="back" data-act="home">‹</button>' : '') +
+    (back ? '<button class="back" data-act="' + (S.retScreen && (S.screen === "types" || S.screen === "dirs") ? 'backform' : 'home') + '">‹</button>' : '') +
     '<div class="hdmain"><h1>' + title + '</h1><div class="sub">' + sub + '</div></div>' +
     '<div class="tools">' + syncChip() + '</div></div>';
 }
@@ -54,8 +54,6 @@ function viewHome() {
     .sort(function (x, y) { var kx = (x.date || "") + (x.time || ""), ky = (y.date || "") + (y.time || ""); return ky < kx ? -1 : ky > kx ? 1 : (y.createdAt || 0) - (x.createdAt || 0); });
   var h = masthead("Pickleball<br>Tournaments", "Hills of Minneola · Pick an event", false);
   h += '<button class="cta" data-act="new">+ Create tournament</button>';
-  h += '<button class="cta ghost" data-act="opentypes">⚙ Manage event types</button>';
-  h += '<button class="cta ghost" data-act="opendirs">👤 Manage tournament directors</button>';
   h += '<button class="cta ghost" data-act="openhelp">❓ How to use this app</button>';
   if (!live.length) {
     h += '<div class="empty">No tournaments yet. Create one, add its event types, and every schedule, pool and bracket builds itself.</div>';
@@ -206,6 +204,7 @@ function viewForm() {
     (f.step === 1 ? "Tournament" : f.step === 2 ? "Event types" : "Entries") + '</div></div></div>';
 
   if (f.step === 1) {
+    h += '<div class="facts" style="margin:14px 0 0;grid-template-columns:1fr 1fr;display:grid"><button type="button" class="fbtn ghost" data-act="opentypes">⚙ Manage event types</button><button type="button" class="fbtn ghost" data-act="opendirs">👤 Manage directors</button></div>';
     h += '<div class="fnote top">Master data for the whole tournament. Each event type you add next carries its own date, pools, format and roster — and can be left empty for players to register themselves.</div>';
     h += '<div class="fsec"><label>Tournament name</label><input type="text" data-field="name" value="' + esc(f.name) + '" placeholder="e.g. Hills of Minneola Fall Classic"></div>';
     h += directorField(f);
@@ -541,7 +540,7 @@ function viewHelp() {
     '<p>To fix a score, open the game again, change it and save. To undo a game, clear both scores. The results passcode can\u2019t change setup, registration, the draw or the order of play.</p>');
   h += sec("Organizers", '<p>The organizer passcode unlocks everything:</p><ul class="hlplist">' +
     '<li><b>Create / Edit setup</b> \u2014 step 1 has the tournament name, director, dates and times, courts, registration on/off, results passcode, address (street, city, state, zip), contact phone and email. Steps 2\u20133 set up the events and entries.</li>' +
-    '<li><b>Tournament directors</b> \u2014 keep a master list (first name, last name, email) under <b>Manage tournament directors</b> on the home screen. In setup, pick the director from the list, or tap <b>+ Add a new tournament director</b> to add one without leaving setup.</li>' +
+    '<li><b>Tournament directors</b> \u2014 keep a master list (first name, last name, email) with <b>Manage directors</b> at the top of tournament setup. In setup, pick the director from the list, or tap <b>+ Add a new tournament director</b> to add one without leaving setup.</li>' +
     '<li><b>Results passcode</b> \u2014 4 digits, different from the organizer passcode. Leave it blank so only the organizer can enter scores.</li>' +
     '<li><b>Individual round robin</b> \u2014 set the rounds and games per player, then tap <b>Draw matches</b>. If players change, <b>Reshuffle</b> clears all scores and redraws.</li>' +
     '<li><b>Manage</b> \u2014 edit entries and pools, move people off the waitlist, number the games, reorder play, print entry lists, and share invitations.</li>' +
