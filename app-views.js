@@ -35,7 +35,7 @@ function shortWhen(e) {
 function players(list) { return (list || []).filter(Boolean).join(" & "); }
 
 function syncChip() {
-  if (!CLOUD) return "";
+  if (!CLOUD || S.sync === "live") return "";
   var cls = S.sync === "offline" ? " off" : (S.sync === "live" ? "" : " wait");
   var label = S.sync === "offline" ? "Retry" : (S.sync === "live" ? "Live" : "Sync");
   return '<button class="syncchip' + cls + '" data-act="refresh"><i></i><span>' + label + '</span></button>';
@@ -386,8 +386,7 @@ function viewEvent() {
   var single = evSingle(e);
   var sub = esc(typeName(e.eventTypeId)) + ' · ' + (e.teams || []).length + (single ? ' players' : ' teams') + (t.locked ? ' · Locked' : '');
   h += '<div class="hd"><button class="back" data-act="home">‹</button><div class="hdmain"><h1>' + esc(t.name) + '</h1><div class="sub">' + sub + '</div></div>' +
-    '<div class="tools">' + (v.live.length ? '<div class="livechip"><i></i><span>LIVE</span></div>' : '') +
-    '<button class="ihelp" data-act="openhelp" aria-label="Help">?</button>' + syncChip() + '</div></div>';
+    '<div class="tools">' + '<button class="ihelp" data-act="openhelp" aria-label="Help">?</button>' + syncChip() + '</div></div>';
 
   if (evs.length > 1) {
     h += '<div class="evbar">' + evs.map(function (x) {
